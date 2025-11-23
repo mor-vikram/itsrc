@@ -64,7 +64,7 @@ def generate_participant_pdf(participant_data, logo_path="logo.jpg", output_path
         logo = None
 
     # === QR Code ===
-    base_url = st.secrets.get("APP_BASE_URL", "https://yourapp.vercel.app")
+    base_url = st.secrets.get("APP_BASE_URL", "http://https://itsrc2025.streamlit.app")
     verification_url = participant_data.get(
         "verification_url",
         f"{base_url}/?verify_id={participant_data.get('id','')}"
@@ -144,3 +144,4 @@ def generate_participant_pdf(participant_data, logo_path="logo.jpg", output_path
         f.write(buffer.getvalue())
 
     return output_path
+
