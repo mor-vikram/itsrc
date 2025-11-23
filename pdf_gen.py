@@ -124,7 +124,7 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
     footer_table_data = [[
         Paragraph("<b>Participant Signature</b>", styles["Normal"]),
         "",
-        Paragraph("<b>Event Official Signature</b>", styles["Normal"])
+        Paragraph("<b>House Captain Signature</b>", styles["Normal"])
     ]]
     footer = Table(footer_table_data, colWidths=[180, 200, 180])
     footer.setStyle(TableStyle([
@@ -144,6 +144,7 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
         f.write(buffer.getvalue())
 
     return output_path
+
 
 
 
