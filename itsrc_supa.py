@@ -1274,7 +1274,7 @@ if menu == "Already Registered (Re-print/Modify)":
 
         pdf_path = generate_participant_pdf(
             participant_data,
-            logo_path="logo.jpg",
+            logo_path=Path("its.gif"),
             output_path=f"{reg.get('name', '')}_form.pdf"
         )
 
@@ -1400,7 +1400,7 @@ if menu == "Already Registered (Re-print/Modify)":
 
                         new_pdf = generate_participant_pdf(
                             participant_data,
-                            logo_path="logo.jpg",
+                            logo_path=Path("its.gif"),
                             output_path=f"{name}_updated_form.pdf"
                         )
 
@@ -2342,5 +2342,6 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
