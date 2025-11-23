@@ -34,7 +34,7 @@ def draw_page_border_and_watermark(canvas, doc):
     canvas.restoreState()
 
 
-def generate_participant_pdf(participant_data, , output_path="participant_form.pdf"):
+def generate_participant_pdf(participant_data,output_path="participant_form.pdf"):
     """
     Generate a styled participant form PDF (A4 portrait) with border, watermark, QR code, and clean layout.
     """
@@ -144,6 +144,7 @@ def generate_participant_pdf(participant_data, , output_path="participant_form.p
         f.write(buffer.getvalue())
 
     return output_path
+
 
 
 
