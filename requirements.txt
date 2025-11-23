@@ -1,0 +1,9 @@
+streamlit
+pandas
+plotly
+fpdf
+reportlab
+Pillow
+python-dotenv
+supabase
+qrcode
