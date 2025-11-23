@@ -1172,7 +1172,7 @@ if menu == "Participant Registration":
 
                 pdf_path = generate_participant_pdf(
                     participant_data,
-                    logo_path="its.gif",
+                    logo_path = Path("its.gif"),
                     output_path=f"{name}_form.pdf"
                 )
 
@@ -2342,4 +2342,5 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
