@@ -904,45 +904,49 @@ def generate_knockout_draw(selected_participants, participants_df):
 # -------------------------------------------------------
 # ---------------------
 # ✅ QR Verification Handler
-# ---------------------
-#query_params = st.experimental_get_query_params()
+# -------------------------------------------------------
+# QR Verification Handler — opens when scanning QR code
+# -------------------------------------------------------
+params = st.query_params
 
-if "verify_id" in st.query_params:
-    verify_id = st.query_params["verify_id"]  # no [0]
+# In new Streamlit, this is usually a str, but we guard for list too
+verify_id = params.get("verify_id", None)
+if isinstance(verify_id, list):
+    verify_id = verify_id[0]
 
-
+if verify_id:
     st.title("✅ Registration Verification")
-    st.write("This page verifies the authenticity of a participant registration.")
 
     try:
-        # Fetch participant by ID from Supabase
+        # Do NOT cast to int; let Supabase handle it
         df_verify = get_participant_by_id(verify_id)
-
-        if df_verify is not None and len(df_verify) > 0:
-            reg = df_verify[0]
-            st.success("✅ Verified: Registration Record Found")
-
-            st.markdown(f"""
-            **Name:** {reg.get('name', '')}  
-            **House:** {reg.get('house', '')}  
-            **Designation:** {reg.get('designation', '')}  
-            **Posting:** {reg.get('posting_details', '')}  
-            **Events:** {reg.get('all_selected_events', '')}  
-            **Date of Registration:** {reg.get('date_of_reg', '')}  
-            **Contact:** {reg.get('contact', '')}
-            """)
-            st.markdown("<hr>", unsafe_allow_html=True)
-            st.info("This certificate is auto-verified from the ITSRC Sports Registration Database.")
-        else:
-            st.error("❌ Invalid or Deleted Registration ID")
     except Exception as e:
         st.error(f"Error verifying participant: {e}")
+        st.stop()
 
-    st.stop()  # Prevent rest of app from running on this page
+    if not df_verify.empty:
+        reg = df_verify.iloc[0].to_dict()
+
+        st.success("✅ Verified: Registration Record Found")
+
+        st.markdown(f"""
+        **Name:** {reg.get('name','')}  
+        **House:** {reg.get('house','')}  
+        **Designation:** {reg.get('designation','')}  
+        **Events:** {reg.get('all_selected_events','')}  
+        **Contact:** {reg.get('contact','')}  
+        **Status:** {reg.get('status','Pending')}  
+        **Date of Registration:** {reg.get('date_of_reg','')}
+        """)
+
+        st.info("This record is verified from the official registration database.")
+    else:
+        st.error("❌ Invalid or deleted Registration ID")
+
+    # Stop further execution to prevent showing full app UI
+    st.stop()
 
 
-#st.sidebar.markdown("<h2 style='font-weight: bold; font-size:24px;'>Menu</h2>", unsafe_allow_html=True)
-#menu = st.sidebar.radio("", ["Login", "Participant Registration", "Already Registered", "Admin Dashboard", "Insight", "Events Schedule", "Matches Draw", "Doubles Partner Selection", "Leadership Board"])
 
 # ---------------------
 # Auth: Login / Signup (using Supabase Auth via anon_client)
@@ -2336,4 +2340,5 @@ if menu == "Doubles Partner Selection":
 st.markdown("---")
 st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
+
 # ---------------------
