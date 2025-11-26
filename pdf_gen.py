@@ -8,7 +8,14 @@ from io import BytesIO
 import datetime
 import qrcode
 import streamlit as st
+from reportlab.graphics.shapes import Drawing, Rect
 
+HOUSE_CAPTAINS = {
+    "CC Challengers": "Shri Rakesh Kumar, ITO",
+    "JAO Giants": "Shri Kishor Kumar, ITO",
+    "Faceless Fighters": "Shri K K Vijayan, ITO",
+    "Investigation Warriors": "Shri Rohit S B Gupta, ITI",
+}
 
 def draw_page_border_and_watermark(canvas, doc):
     """Draws border and watermark."""
@@ -48,6 +55,73 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
     story = []
     styles = getSampleStyleSheet()
 
+    # -------- Custom styles --------
+    title_style = ParagraphStyle(
+        "TitleBig",
+        parent=styles["Title"],
+        fontSize=20,
+        leading=24,
+        alignment=1,  # center
+        textColor=colors.HexColor("#004d40"),
+        spaceAfter=6,
+    )
+    subtitle_style = ParagraphStyle(
+        "Subtitle",
+        parent=styles["Normal"],
+        fontSize=12,
+        leading=16,
+        alignment=1,
+        textColor=colors.HexColor("#00695c"),
+        spaceAfter=4,
+    )
+    form_title_style = ParagraphStyle(
+        "FormTitle",
+        parent=styles["Heading2"],
+        fontSize=14,
+        leading=18,
+        alignment=1,
+        textColor=colors.black,
+        spaceBefore=6,
+        spaceAfter=10,
+    )
+    label_style = ParagraphStyle(
+        "Label",
+        parent=styles["Normal"],
+        fontSize=10.5,
+        leading=13,
+        textColor=colors.HexColor("#004d40"),
+    )
+    value_style = ParagraphStyle(
+        "Value",
+        parent=styles["Normal"],
+        fontSize=10.5,
+        leading=13,
+        textColor=colors.black,
+    )
+    footer_style = ParagraphStyle(
+        "Footer",
+        parent=styles["Normal"],
+        fontSize=10,
+        leading=12,
+    )
+    italic_grey_style = ParagraphStyle(
+        "ItalicGrey",
+        parent=styles["Italic"],
+        fontSize=9,
+        leading=12,
+        textColor=colors.grey,
+        alignment=1,
+    )
+    approved_style = ParagraphStyle(
+        "Approved",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=14,
+        textColor=colors.HexColor("#000000"),
+        alignment=0,  # left align
+        spaceAfter=6,
+    )
+
     # === Header Styles ===
     header_style = ParagraphStyle(
         'header_style', fontSize=18, alignment=1,
@@ -85,55 +159,99 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8)
     ]))
     story.append(header_table)
-    story.append(Paragraph("Participant Registration Form", subheader_style))
+    story.append(Paragraph("(Sports Events @2025-26)", subtitle_style))
+    story.append(Paragraph("Participant Registration Form", form_title_style))
     story.append(Spacer(1, 15))
 
-    # === Participant Info Table ===
-    info_labels = [
-        ("Name", participant_data.get("name", "")),
-        ("Post", participant_data.get("post", "")),
-        ("House", participant_data.get("house", "")),
-        ("Event(s)", participant_data.get("event", "")),
-        ("Contact Number", participant_data.get("contact", "")),
-        ("Posting", participant_data.get("posting", "")),
-        ("Category", participant_data.get("category", "")),
-        ("Gender", participant_data.get("gender", "")),
-        ("Age", participant_data.get("age", "")),
-        ("Fee Paid (INR)", participant_data.get("fee", "")),
-        ("Date of Registration", participant_data.get("registration_date", datetime.date.today().strftime("%d-%m-%Y"))),
+    
+
+    # -------- Participant details table --------
+    name = participant_data.get("name", "")
+    post = participant_data.get("post", "")
+    house = participant_data.get("house", "")
+    event = participant_data.get("event", "")
+    contact = participant_data.get("contact", "")
+    posting = participant_data.get("posting", "")
+    category = participant_data.get("category", "")
+    gender = participant_data.get("gender", "")
+    age = participant_data.get("age", "")
+    fee = participant_data.get("fee", "")
+    reg_date = participant_data.get(
+        "registration_date",
+        datetime.date.today().strftime("%d-%m-%Y"),
+    )
+
+    data_rows = [
+        [Paragraph("<b>Name</b>", label_style),
+         Paragraph(str(name), value_style)],
+        [Paragraph("<b>House</b>", label_style),
+         Paragraph(str(house), value_style)],
+        [Paragraph("<b>Post Held</b>", label_style),
+         Paragraph(str(post), value_style)],
+        [Paragraph("<b>Posting Details</b>", label_style),
+         Paragraph(str(posting), value_style)],
+        [Paragraph("<b>Contact Number</b>", label_style),
+         Paragraph(str(contact), value_style)],
+        [Paragraph("<b>Gender</b>", label_style),
+         Paragraph(str(gender), value_style)],
+        [Paragraph("<b>Age</b>", label_style),
+         Paragraph(str(age), value_style)],
+        [Paragraph("<b>Category</b>", label_style),
+         Paragraph(str(category), value_style)],
+        [Paragraph("<b>Events Registered</b>", label_style),
+         Paragraph(str(event), value_style)],
+        [Paragraph("<b>Fee</b>", label_style),
+         Paragraph(f"Rs. {fee}", value_style)],
+        [Paragraph("<b>Date of Registration</b>", label_style),
+         Paragraph(str(reg_date), value_style)],
     ]
 
-    table_data = [
-        [Paragraph(f"<b>{label}</b>", styles["Normal"]), Paragraph(str(value), styles["Normal"])]
-        for label, value in info_labels
-    ]
-
-    info_table = Table(table_data, colWidths=[160, 340])
-    info_table.setStyle(TableStyle([
-        ('GRID', (0,0), (-1,-1), 0.6, colors.grey),
-        ('BACKGROUND', (0,0), (-1,0), colors.whitesmoke),
-        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('LEFTPADDING', (0,0), (-1,-1), 8),
-        ('RIGHTPADDING', (0,0), (-1,-1), 8),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+    details_table = Table(data_rows, colWidths=[140, 360])
+    details_table.setStyle(TableStyle([
+        ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#e0f2f1")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
     ]))
-    story.append(info_table)
-    story.append(Spacer(1, 40))
+    story.append(details_table)
+    story.append(Spacer(1, 16))
 
-    # === Signature Section ===
-    footer_table_data = [[
-        Paragraph("<b>Participant Signature</b>", styles["Normal"]),
-        "",
-        Paragraph("<b>House Captain Signature</b>", styles["Normal"])
-    ]]
-    footer = Table(footer_table_data, colWidths=[180, 200, 180])
+    # === Footer Section ===
+    house_name = participant_data.get("house", "")
+    captain_name = HOUSE_CAPTAINS.get(house_name, "House Captain")
+
+    footer_table_data = [
+        [
+            Paragraph("<b>Signature of Participant</b>", footer_style),            
+            ""
+        ],
+        [
+            Paragraph(f"<b>Date:</b> {datetime.date.today().strftime('%d-%m-%Y')}", footer_style),
+            Paragraph("", footer_style),
+            
+            Paragraph(f"<b>{captain_name}</b><br/><i>House Captain, {house_name}</i>", footer_style),
+            ""
+        ]
+    ]
+
+    footer = Table(footer_table_data, colWidths=[180, 50, 180])
     footer.setStyle(TableStyle([
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('ALIGN', (0, 0), (0, 0), 'LEFT'),  # Align content in first column to the left
+        ('ALIGN', (2, 0), (2, 1), 'RIGHT'), # Align content in second column to the right
+        ('VALIGN', (0, 0), (1, 0), 'TOP'),  # Align both vertically to the top
         ('TOPPADDING', (0,0), (-1,-1), 40),
         ('LEFTPADDING', (0,0), (-1,-1), 40),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
+        
     ]))
+
     story.append(footer)
     story.append(Spacer(1, 20))
+    story.append(Paragraph("**Submit the form, along with the fee, to your house captain.", approved_style))
+    story.append(Spacer(1, 60))
     story.append(Paragraph("<i>Organized by ITSRC Sports Committee</i>", subheader_style))
 
     # === Build PDF with Border + Watermark ===
