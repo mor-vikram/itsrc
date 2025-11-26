@@ -1157,7 +1157,7 @@ if menu == "Participant Registration":
     # Optional message
     st.markdown(
         f"<span style='color: red; font-weight: bold;'>"
-        f"Last date for registration without late fee is {LAST_REG_DATE.strftime('%d-%m-%Y')} and with late fee (Rs. 150) is 20-12-2025."
+        f"Last date for registration without late fee is {LAST_REG_DATE.strftime('%d-%m-%Y')} and with late fee is 20-12-2025.(Late fee: Rs. 150)"
         f"</span>",
         unsafe_allow_html=True
     )
@@ -2548,6 +2548,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
