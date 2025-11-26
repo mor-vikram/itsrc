@@ -22,6 +22,7 @@ from pathlib import Path
 from reportlab.lib.pagesizes import A5
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
+from streamlit.components.v1 import html
 
 st.set_page_config(
     page_title="Sports Meet Registration",
@@ -313,28 +314,14 @@ event_details = {
     "Carom": ["Carom Singles", "Carom Doubles"],
     "Volleyball": ["Volleyball"],
     "Chess": ["Chess"],
-    "Kite Cutting Competition": ["Kite Cutting Competition"],
-    "Cycling": ["500 Mtr (Slow)", "11 Km (Female)", "25 Km (Male)"],
+    "Pickle ball": ["Pickle ball Doubles"],
+    "Cycling": ["Slow Cycling"],
     "Walkathon": ["2.2 Km Walk"],
     "Races": ["100 meter", "200 meter", "400 meter", "400 Meter Relay"],
     "Races (Veteran)": ["100 meter (Veteran)", "200 meter (Veteran)", "400 meter (Veteran)", "400 Meter Relay (Veteran)"],
     "Tug of War": ["Tug of War"]
 }
-event_fees = {
-    "Cricket": 50,
-    "Badminton": 50,
-    "Badminton (Veteran)": 50,
-    "Table Tennis": 50,
-    "Table Tennis (Veteran)": 50,
-    "Carom": 50,
-    "Volleyball": 50,
-    "Chess": 50,
-    "Kite Cutting Competition": 50,
-    "Cycling": 50,
-    "Walkathon": 50,
-    "Races": 50,
-    "Tug of War": 50
-}
+
 
 # ---------------------
 # Helper: Supabase CRUD wrappers
@@ -634,28 +621,71 @@ def get_admin_role_for_email(email):
 
 
 # Leaderboard compute: compute from winners table
+# Leaderboard compute: compute from winners table
 def compute_leaderboard_from_winners():
     """
-    Points: 1st=5, 2nd=3, 3rd=1
+    Scoring Rules:
+      • Individual Events → 1st = 5, 2nd = 3, 3rd = 1
+      • Team Events (Cricket, Volleyball, Tug of War)
+                         → 1st = 10, 2nd = 6, 3rd = 1
     """
-    winners = load_winners_df()
-    if not winners:
-        return pd.DataFrame([{"House": h, "Points": 0} for h in houses])
-    df = pd.DataFrame(winners)
-    # Ensure columns exist
+    winners_raw = load_winners_df()   # may return DataFrame or []
+
+    # Normalise to DataFrame
+    if isinstance(winners_raw, pd.DataFrame):
+        df = winners_raw.copy()
+    elif winners_raw:
+        df = pd.DataFrame(winners_raw)
+    else:
+        df = pd.DataFrame()
+
     if df.empty:
-        return pd.DataFrame([{"House": h, "Points": 0} for h in houses])
-    # Aggregate points
-    points_map = {"1st": 5, "2nd": 3, "3rd": 1}
-    df["pts"] = df["position"].map(points_map).fillna(0)
-    agg = df.groupby("house")["pts"].sum().reset_index().rename(columns={"pts": "Points", "house": "House"})
-    # include houses with zero
+        # return zero-points table but still with ranks for all houses
+        base = pd.DataFrame([{"House": h, "Points": 0} for h in houses])
+        base["Rank"] = base["Points"].rank(method="min", ascending=False).astype(int)
+        return base[["Rank", "House", "Points"]]
+
+    required_cols = {"house", "event_name", "position"}
+    if not required_cols.issubset(df.columns):
+        missing = ", ".join(required_cols - set(df.columns))
+        st.error(f"⚠️ Winners table format mismatch. Missing columns: {missing}")
+        base = pd.DataFrame([{"House": h, "Points": 0} for h in houses])
+        base["Rank"] = base["Points"].rank(method="min", ascending=False).astype(int)
+        return base[["Rank", "House", "Points"]]
+
+    # Points mapping
+    individual_points = {"1st": 5, "2nd": 3, "3rd": 1}
+    team_points       = {"1st": 10, "2nd": 6, "3rd": 1}
+
+    # Team events list (exactly as stored in winners.event_name)
+    team_events = {"Cricket", "Volleyball", "Tug of War"}
+
+    def calculate_points(row):
+        event = str(row["event_name"]).strip()
+        position = str(row["position"]).strip()
+        if event in team_events:
+            return team_points.get(position, 0)
+        return individual_points.get(position, 0)
+
+    df["Points"] = df.apply(calculate_points, axis=1)
+
+    # Aggregate by house
+    leaderboard = (
+        df.groupby("house")["Points"]
+          .sum()
+          .reset_index()
+          .rename(columns={"house": "House"})
+    )
+
+    # Ensure all houses exist
     for h in houses:
-        if h not in agg["House"].values:
-            agg = pd.concat([agg, pd.DataFrame([{"House": h, "Points": 0}])], ignore_index=True)
-    agg = agg.sort_values(by="Points", ascending=False).reset_index(drop=True)
-    agg["Rank"] = agg["Points"].rank(method="min", ascending=False).astype(int)
-    return agg[["Rank", "House", "Points"]]
+        if h not in leaderboard["House"].values:
+            leaderboard.loc[len(leaderboard)] = [h, 0]
+
+    leaderboard = leaderboard.sort_values("Points", ascending=False).reset_index(drop=True)
+    leaderboard["Rank"] = leaderboard["Points"].rank(method="min", ascending=False).astype(int)
+
+    return leaderboard[["Rank", "House", "Points"]]
 
 
 def make_status_chip_html(status_value):
@@ -884,24 +914,133 @@ def create_pdf_receipt(registration):
     pdf_file = BytesIO(packet.read())
     return pdf_file
 
-def generate_knockout_draw(selected_participants, participants_df):
-    random.shuffle(selected_participants)
-    match_pairs = [
-        (
-            f"{selected_participants[i]} ({participants_df.loc[participants_df['name'] == selected_participants[i], 'house'].values[0]})",
-            f"{selected_participants[i + 1]} ({participants_df.loc[participants_df['name'] == selected_participants[i + 1], 'house'].values[0]})",
-        )
-        for i in range(0, len(selected_participants) - 1, 2)
-    ]
-    if len(selected_participants) % 2 == 1:
-        last_participant = selected_participants[-1]
-        last_participant_house = participants_df.loc[participants_df["name"] == last_participant, "house"].values[0]
-        match_pairs.append((f"{last_participant} ({last_participant_house})", "BYE"))
-    return pd.DataFrame(match_pairs, columns=["Participant 1", "Participant 2"])
+# --- Helper: add medal column + HTML styling ---
+def styled_leaderboard_html(board_df: pd.DataFrame) -> str:
+    df = board_df.copy()
 
-# -------------------------------------------------------
-# QR Verification Handler — opens when scanning QR code
-# -------------------------------------------------------
+    medal_map = {
+        1: "🥇 Gold",
+        2: "🥈 Silver",
+        3: "🥉 Bronze",
+    }
+    df["Medal"] = df["Rank"].map(medal_map).fillna("")
+
+    # Reorder columns
+    df = df[["Rank", "Medal", "House", "Points"]]
+
+    # Build HTML table
+    html_table = df.to_html(
+        escape=False,
+        index=False,
+        classes="leaderboard-table"
+    )
+
+    # Full HTML document for the component
+    full_html = f"""
+    <html>
+    <head>
+      <style>
+        table.leaderboard-table {{
+          border-collapse: collapse;
+          width: 100%;
+          font-family: "Poppins", sans-serif;
+        }}
+        table.leaderboard-table th, table.leaderboard-table td {{
+          border: 1px solid #e0e0e0;
+          padding: 6px 10px;
+          text-align: center;
+        }}
+        table.leaderboard-table th {{
+          background-color: #004d40;
+          color: #ffffff;
+        }}
+        table.leaderboard-table tr:nth-child(even) {{
+          background-color: #f9f9f9;
+        }}
+        table.leaderboard-table tr:nth-child(1) {{
+          background-color: #fff9c4;   /* light gold */
+        }}
+        table.leaderboard-table tr:nth-child(2) {{
+          background-color: #e3f2fd;   /* light blue */
+        }}
+        table.leaderboard-table tr:nth-child(3) {{
+          background-color: #fce4ec;   /* light pink */
+        }}
+      </style>
+    </head>
+    <body>
+      {html_table}
+    </body>
+    </html>
+    """
+    return full_html
+
+
+# --- Helper: PDF export for leaderboard + winners ---
+def generate_leadership_board_pdf(board_df: pd.DataFrame, winners_df: pd.DataFrame):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    # Title
+    elements.append(Paragraph("Leadership Board", styles["Title"]))
+    elements.append(Paragraph("(ITSRC, Vadodara - Sports Events 2025-26)", styles["Heading2"]))
+    elements.append(Spacer(1, 12))
+
+    # Top house line
+    if not board_df.empty:
+        top_row = board_df.sort_values("Rank").iloc[0]
+        top_text = f"🏆 Top House: <b>{top_row['House']}</b> with <b>{int(top_row['Points'])}</b> points"
+        elements.append(Paragraph(top_text, styles["Heading3"]))
+        elements.append(Spacer(1, 12))
+
+    # Scoring rules
+    rule_text = (
+        "Scoring Rules: "
+        "Individual Events → 1st = 5, 2nd = 3, 3rd = 1. "
+        "Team Events (Cricket, Volleyball, Tug of War) → 1st = 10, 2nd = 6"
+    )
+    elements.append(Paragraph(rule_text, styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    # Leaderboard table (with medals)
+    medal_map = {1: "Gold", 2: "Silver", 3: "Bronze"}
+    pdf_df = board_df.copy()
+    pdf_df["Medal"] = pdf_df["Rank"].map(medal_map).fillna("")
+    pdf_df = pdf_df[["Rank", "Medal", "House", "Points"]]
+
+    data = [pdf_df.columns.tolist()] + pdf_df.values.tolist()
+    table = Table(data)
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.black),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 18))
+
+    # Winners list
+    elements.append(Paragraph("Event-wise Winners", styles["Heading2"]))
+    if isinstance(winners_df, pd.DataFrame) and not winners_df.empty:
+        winners_records = winners_df.to_dict("records")
+        for w in winners_records:
+            line = (
+                f"{w.get('event_name','')} ({w.get('category','')}) – "
+                f"{w.get('position','')}: {w.get('winner_name','')} "
+                f"({w.get('house','')})"
+            )
+            elements.append(Paragraph(line, styles["Normal"]))
+            elements.append(Spacer(1, 4))
+    else:
+        elements.append(Paragraph("No winners recorded yet.", styles["Normal"]))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
 # ---------------------
 # ✅ QR Verification Handler
 # -------------------------------------------------------
@@ -1013,12 +1152,12 @@ if menu == "Participant Registration":
     st.write("Welcome! You can register for events")
 
     # ---- Global last date for normal registration ----
-    LAST_REG_DATE = datetime(2025, 12, 2).date()   # <-- change date here if needed
+    LAST_REG_DATE = datetime(2025, 12, 10).date()   # <-- change date here if needed
 
     # Optional message
     st.markdown(
         f"<span style='color: red; font-weight: bold;'>"
-        f"Last date for registration without late fee is {LAST_REG_DATE.strftime('%d-%m-%Y')}"
+        f"Last date for registration without late fee is {LAST_REG_DATE.strftime('%d-%m-%Y')} and with late fee is 20-12-2025."
         f"</span>",
         unsafe_allow_html=True
     )
@@ -1072,7 +1211,7 @@ if menu == "Participant Registration":
             st.info("Note: Veteran categories (45 years and above) are hidden because your age is under 45.")
 
         selected_events = {}
-        total_fee = 0
+        total_fee = 250  # base fee
         selected_categories = set()
 
         # show categories — skip categories whose name contains 'veteran' when age < 45
@@ -1083,25 +1222,18 @@ if menu == "Participant Registration":
 
             selected_events[category] = st.multiselect(f"{category}", options=events)
 
-            # fee calculation: one category fee regardless of how many sub-events selected
-            if selected_events[category] and category not in selected_categories:
-                total_fee += event_fees.get(category, 0)
-                selected_categories.add(category)
-
         # ---- Fee calculations ----
-        # Base fee capped at 300
-        total_fee = min(total_fee, 300)
-
+       
         # Late fee logic
         today = datetime.now().date()
         is_late = today > LAST_REG_DATE
-        late_fee = 50 if is_late else 0
+        late_fee = 150 if is_late else 0
         final_fee = total_fee + late_fee
 
         st.write(f"**Event Fee (capped): Rs.{total_fee}**")
         if is_late:
             st.warning(
-                f"Late registration: additional Rs.50 will be charged "
+                f"Late registration: additional Rs.150 will be charged "
                 f"(Last date was {LAST_REG_DATE.strftime('%d-%m-%Y')})."
             )
         st.write(f"**Total Payable Fee: Rs.{final_fee}**")
@@ -1326,7 +1458,7 @@ if menu == "Already Registered (Re-print/Modify)":
                     st.info("Note: Veteran categories (45 years and above) are hidden because your age is under 45.")
 
                 selected_events = {}
-                total_fee = 0
+                total_fee = 250  # base fee
                 selected_categories = set()
 
                 for category, events in event_details.items():
@@ -1343,10 +1475,9 @@ if menu == "Already Registered (Re-print/Modify)":
                     )
 
                     if selected_events[category] and category not in selected_categories:
-                        total_fee += event_fees.get(category, 0)
                         selected_categories.add(category)
 
-                total_fee = min(total_fee, 300)
+                
                 st.write(f"**Total Fee:** Rs.{total_fee}")
 
                 save_changes = st.form_submit_button("💾 Save Changes")
@@ -2100,69 +2231,144 @@ if menu == "Insight":
 # ---------------------
 # Events Schedule (static content kept)
 # ---------------------
+# ---------------------
+# ---------------------
+# Events Schedule
+# ---------------------
 if menu == "Events Schedule":
     st.title("📅 Events Schedule")
     st.subheader("Schedule for ITSRC Sports Events 2025-26")
-    st.markdown("<div style='font-size:20px;color:blue'>Coming Soon!</div>", unsafe_allow_html=True)
-    # (You can paste the static schedule content here as in original code.)
+    st.info("Scroll the schedule below or download it for printing.")
 
+    pdf_path = Path("Schedule 2025.pdf")   # 👈 make sure this filename/path is correct
+
+    if pdf_path.exists():
+        with open(pdf_path, "rb") as f:
+            pdf_bytes = f.read()
+
+        base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+
+        # 🔹 Embedded scrollable PDF
+        html(
+            f"""
+            <iframe
+                src="data:application/pdf;base64,{base64_pdf}"
+                style="width:100%; height:800px; border:none;"
+            ></iframe>
+            """,
+            height=820,
+        )
+
+        # 🔹 Download button
+        st.download_button(
+            label="📥 Download Full Schedule (PDF)",
+            data=pdf_bytes,
+            file_name="Schedule 2025.pdf",
+            mime="application/pdf",
+        )
+    else:
+        st.error("Schedule PDF not found on the server. Please contact the organizer.")
+
+
+# ---------------------
 # ---------------------
 # Leadership Board
 # ---------------------
 if menu == "Leadership Board":
     st.title("🏆 Leadership Board")
+
+    # Live refresh button (auto-update from Supabase)
+    if st.button("🔄 Refresh Leaderboard"):
+        st.rerun()
+
+    # Compute leaderboard
     board_df = compute_leaderboard_from_winners()
-    st.write(board_df.to_html(escape=False, index=False), unsafe_allow_html=True)
-    fig = px.bar(board_df, x="House", y="Points", title="Overall House Ranking", color="House")
-    st.plotly_chart(fig)
 
+    # Load winners once for both display + PDF
+    winners_df = load_winners_df()
+    if isinstance(winners_df, list):
+        winners_df = pd.DataFrame(winners_df)
+
+    # 🏆 Trophy section
+    if not board_df.empty:
+        top_row = board_df.sort_values("Rank").iloc[0]
+        st.markdown(
+            f"""
+            <div style="padding:10px 15px;border-radius:10px;
+                        background:#fff3cd;border-left:5px solid #ffb300;
+                        margin-bottom:15px;">
+                <span style="font-size:26px;">🏆</span>
+                <span style="font-size:20px;font-weight:600;margin-left:8px;">
+                    Current Top House: {top_row['House']} ({int(top_row['Points'])} pts)
+                </span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # Optional celebration
+        if st.button("🎉 Celebrate Top House"):
+            st.balloons()
+
+    # 🎖️ Medal-styled leaderboard table
+    st.subheader("House Rankings")
+    #st.markdown(styled_leaderboard_html(board_df), unsafe_allow_html=True)
+    html(styled_leaderboard_html(board_df), height=260, scrolling=False)
+
+    # 📄 Export as PDF
+    st.markdown("---")
+    st.subheader("Export")
+    if st.button("📄 Generate Leadership Board PDF"):
+        pdf_buf = generate_leadership_board_pdf(board_df, winners_df)
+        st.download_button(
+            "Download Leadership Board PDF",
+            data=pdf_buf,
+            file_name="Leadership_Board.pdf",
+            mime="application/pdf",
+        )
+
+
+        # ---------------------
+    # Event-wise Winners (grouped nicely)
+    # ---------------------
     st.subheader("📜 Event-wise Winners")
-    winners = load_winners_df()
-    if winners:
-        for w in winners:
-            st.write(f"### {w['event_name']} ({w.get('category','')})")
-            st.write(f"Position: {w['position']}, Name: {w['winner_name']}, House: {w['house']}")
-            st.markdown("---")
+
+    winners_raw = load_winners_df()
+    if isinstance(winners_raw, list):
+        winners_df = pd.DataFrame(winners_raw)
     else:
-        st.warning("No winners data available.")
+        winners_df = winners_raw
 
-    # PDF export
-    def generate_leadership_board_pdf(points_df, winners_df):
-        buffer = BytesIO()
-        doc = SimpleDocTemplate(buffer, pagesize=letter)
-        styles = getSampleStyleSheet()
-        elements = []
-        elements.append(Paragraph("Leadership Board", styles["Title"]))
-        elements.append(Spacer(1, 12))
-        data = [["House", "Points"]] + points_df[["House", "Points"]].values.tolist()
-        table = Table(data)
-        table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("GRID", (0, 0), (-1, -1), 1, colors.black),
-            ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-        ]))
-        elements.append(table)
-        elements.append(Spacer(1, 12))
-        elements.append(Paragraph("Event-wise Winners", styles["Heading2"]))
-        for w in winners_df:
-            elements.append(Paragraph(f"{w['event_name']} ({w.get('category','')}) - {w['position']}: {w['winner_name']} ({w['house']})", styles["Normal"]))
-            elements.append(Spacer(1,6))
-        doc.build(elements)
-        buffer.seek(0)
-        return buffer
+    if winners_df is None or winners_df.empty:
+        st.warning("No winners data available yet.")
+    else:
+        # Make sure we have needed columns
+        winners_df = winners_df.fillna("")
+        # Group by Event + Category
+        grouped = winners_df.groupby(["event_name", "category"], sort=True)
 
-    if st.button("Generate Leadership Board PDF"):
-        winners_raw = load_winners_df()
-        pdf_buf = generate_leadership_board_pdf(board_df, winners_raw)
-        st.download_button("Download Leadership Board PDF", data=pdf_buf, file_name="Leadership_Board.pdf", mime="application/pdf")
+        for (event_name, cat), grp in grouped:
+            # Event + category heading (once, in bold)
+            heading = f"**{event_name} ({cat})**" if cat else f"**{event_name}**"
+            st.markdown(heading)
 
+            # Sort positions so 1st,2nd,3rd appear in order
+            order_map = {"1st": 1, "2nd": 2, "3rd": 3}
+            grp = grp.copy()
+            grp["pos_order"] = grp["position"].map(order_map).fillna(99)
+            grp = grp.sort_values("pos_order")
 
-# ---------------------
-# Doubles Partner Selection
-# ---------------------
-# ---------------------
+            # Lines for winners
+            for _, row in grp.iterrows():
+                st.markdown(
+                    f"- {row['position']}: **{row['winner_name']}** "
+                    f"(_{row['house']}_)"
+                )
+
+            st.markdown("---")
+
+    
+
 # ---------------------
 # Doubles Partner Selection / Registration
 # ---------------------
