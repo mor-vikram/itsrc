@@ -2418,7 +2418,7 @@ if menu == "Doubles Partner Selection":
                     st.write("✅ Approved participants for this event:")
                     st.dataframe(
                         filtered[
-                            ["name", "house", "gender", "contact", "all_selected_events", "status"]
+                            ["name", "house", "gender", "contact", "status"]
                         ]
                     )
 
@@ -2593,6 +2593,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
