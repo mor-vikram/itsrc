@@ -2373,172 +2373,217 @@ if menu == "Leadership Board":
 # Doubles Partner Selection / Registration
 # ---------------------
 if menu == "Doubles Partner Selection":
-    st.title("🎾 Doubles Partner Registration")
+    st.title("🎾 Doubles Partner Selection")
 
-    # Only events that are Doubles / Mixed Doubles
+    # All events that are doubles / mixed doubles
     doubles_events = [
         event
         for events in event_details.values()
         for event in events
-        if "doubles" in event.lower()
+        if "Doubles" in event
     ]
 
-    selected_event = st.selectbox("Select Doubles Event", doubles_events)
+    tab_register, tab_view = st.tabs(["➕ Register Pair", "📜 View Registered Pairs"])
 
-    if selected_event:
-        # Load all registered participants from Supabase
-        all_df = load_all_participants_df()
+    # =========================
+    # TAB 1: Register Pair
+    # =========================
+    with tab_register:
+        st.markdown(
+            """
+            - Only **same-gender pairs** are allowed for standard doubles events.  
+            - **Male–Female pairs must register under Mixed Doubles events.**  
+            - Both players must have **Approved** registration for this event.
+            """,
+            unsafe_allow_html=True,
+        )
 
-        if all_df.empty:
-            st.warning("No participants registered yet.")
-        else:
-            # ✅ Enforce APPROVED status only
-            if "status" in all_df.columns:
-                all_df["status_clean"] = all_df["status"].fillna("Pending")
-                approved_df = all_df[all_df["status_clean"] == "Approved"].copy()
+        st.subheader("Select Your Event and Partner")
+        selected_event = st.selectbox("Select Doubles Event", doubles_events, key="dbl_sel_event")
+        if selected_event:
+            all_df = load_all_participants_df()
+            if all_df.empty:
+                st.warning("No participants available.")
             else:
-                # If for some reason status column missing, safest is to block pairing
-                st.error("Status column missing. For safety, doubles pairing is disabled until status is configured.")
-                approved_df = pd.DataFrame()
-
-            if approved_df.empty:
-                st.warning("No approved participants available for doubles pairing.")
-            else:
-                # Ensure "All Selected Events" exists and is string
-                approved_df["All Selected Events"] = approved_df["All Selected Events"].fillna("")
-
-                # participants who have chosen this doubles event
-                event_mask = approved_df["All Selected Events"].str.contains(
-                    selected_event, case=False, na=False
+                # Only participants who selected this event AND are Approved
+                event_mask = all_df["All Selected Events"].str.contains(
+                    selected_event, na=False, case=False
                 )
-                event_participants = approved_df[event_mask].copy()
+                status_mask = all_df["status"].fillna("Pending") == "Approved"
+                filtered = all_df[event_mask & status_mask]
 
-                if event_participants.empty:
-                    st.warning(
-                        f"No APPROVED participants have registered for '{selected_event}' yet. "
-                        "Participants must be approved before forming doubles pairs."
-                    )
+                if filtered.empty:
+                    st.warning("No approved participants signed up for this event.")
                 else:
-                    st.info(
-                        f"{len(event_participants)} approved participant(s) are eligible for '{selected_event}'."
+                    st.write("✅ Approved participants for this event:")
+                    st.dataframe(
+                        filtered[
+                            ["name", "house", "gender", "contact", "all_selected_events", "status"]
+                        ]
                     )
 
-                    # show compact view
-                    display_cols = [
-                        c for c in [
-                            "name", "house", "designation", "posting_details",
-                            "contact", "gender", "age", "all_selected_events", "status_clean"
-                        ] if c in event_participants.columns
-                    ]
-                    st.markdown("#### Eligible Approved Participants for this Event")
-                    st.dataframe(event_participants[display_cols], use_container_width=True)
+                    contact_1 = st.text_input("Enter your contact number:", key="dbl_contact_1")
+                    contact_2 = st.text_input("Enter your partner's contact number:", key="dbl_contact_2")
 
-                    st.markdown("---")
-                    st.markdown("### 🧑‍🤝‍🧑 Register a Doubles Pair")
+                    # Store submitted but unconfirmed pair in session
+                    if "pending_pair" not in st.session_state:
+                        st.session_state.pending_pair = None
 
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        contact_1 = st.text_input("Your Contact Number (Player 1)", key="dbl_contact1")
-                    with col2:
-                        contact_2 = st.text_input("Partner's Contact Number (Player 2)", key="dbl_contact2")
 
-                    if st.button("Submit Pair", key="submit_doubles_pair"):
-                        c1 = contact_1.strip()
-                        c2 = contact_2.strip()
+                    if st.button("Submit Pair", key="dbl_submit_pair"):
+                        contact_1 = contact_1.strip()
+                        contact_2 = contact_2.strip()
 
-                        # basic validation
-                        if not c1 or not c2:
-                            st.error("Please enter both contact numbers.")
-                        elif not c1.isdigit() or len(c1) != 10:
-                            st.error("Player 1: Invalid contact number. Please enter a 10-digit number.")
-                        elif not c2.isdigit() or len(c2) != 10:
-                            st.error("Player 2: Invalid contact number. Please enter a 10-digit number.")
-                        elif c1 == c2:
-                            st.error("Both contact numbers are the same. Please enter two different participants.")
+                        p1 = filtered[filtered["contact"] == contact_1]
+                        p2 = filtered[filtered["contact"] == contact_2]
+
+                        if p1.empty or p2.empty:
+                            st.error("One or both contact numbers not found among approved participants for this event.")
+                        elif contact_1 == contact_2:
+                            st.error("You cannot pair with yourself. Please enter two different participants.")
                         else:
-                            # normalize contact
-                            event_participants["contact_str"] = event_participants["contact"].astype(str).str.strip()
-
-                            p1 = event_participants[event_participants["contact_str"] == c1]
-                            p2 = event_participants[event_participants["contact_str"] == c2]
-
-                            if p1.empty or p2.empty:
-                                st.error(
-                                    "One or both contact numbers are not APPROVED participants "
-                                    f"for '{selected_event}'."
-                                )
+                            # same house check
+                            if p1.iloc[0]["house"] != p2.iloc[0]["house"]:
+                                st.error("Participants must be from the same house.")
                             else:
-                                house1 = p1.iloc[0]["house"]
-                                house2 = p2.iloc[0]["house"]
-                                if house1 != house2:
+                                # Gender rule for non-mixed events
+                                is_mixed_event = "mixed" in selected_event.lower()
+                                gender1 = str(p1.iloc[0]["gender"]).lower()
+                                gender2 = str(p2.iloc[0]["gender"]).lower()
+
+                                if not is_mixed_event and gender1 != gender2:
                                     st.error(
-                                        f"Participants belong to different houses ({house1} vs {house2}). "
-                                        "Both players must be from the same house."
+                                        "For standard doubles events, both partners must be of the same gender.\n"
+                                        "Please register under a Mixed Doubles event for male–female pairs."
                                     )
                                 else:
-                                    # load existing pairs for this event
+                                    # Before saving — check duplicates
                                     existing_pairs = load_pairs_for_event(selected_event)
-                                    dup_pair = False
-                                    already_paired = False
-
+                                    duplicate = False
                                     if not existing_pairs.empty:
-                                        existing_pairs["p1"] = existing_pairs["player1_contact"].astype(str).str.strip()
-                                        existing_pairs["p2"] = existing_pairs["player2_contact"].astype(str).str.strip()
-
-                                        # 1) prevent exact or reversed duplicates (A-B vs B-A)
-                                        for _, r in existing_pairs.iterrows():
-                                            if ((r["p1"] == c1 and r["p2"] == c2) or
-                                                (r["p1"] == c2 and r["p2"] == c1)):
-                                                dup_pair = True
+                                        for _, row in existing_pairs.iterrows():
+                                            a1, a2 = row["player1_contact"], row["player2_contact"]
+                                            if {a1, a2} == {contact_1, contact_2}:
+                                                duplicate = True
                                                 break
 
-                                        # 2) also prevent either player being in another pair
-                                        existing_contacts = set(existing_pairs["p1"]) | set(existing_pairs["p2"])
-                                        if c1 in existing_contacts or c2 in existing_contacts:
-                                            already_paired = True
-
-                                    if dup_pair:
-                                        st.error("This pair is already registered (including reversed order).")
-                                    elif already_paired:
-                                        st.error(
-                                            "One of these participants is already registered as a doubles partner "
-                                            "for this event."
-                                        )
+                                    if duplicate:
+                                        st.warning("This pair already exists for this event (including reverse order).")
                                     else:
-                                        pair = {
-                                            "player1_name": p1.iloc[0]["name"],
-                                            "player1_contact": c1,
-                                            "player2_name": p2.iloc[0]["name"],
-                                            "player2_contact": c2,
-                                            "event_name": selected_event,
-                                            "house": house1,
+                                        # save temporarily & show confirmation UI
+                                        st.session_state.pending_pair = {
+                                            "event": selected_event,
+                                            "house": p1.iloc[0]["house"],
+                                            "p1": {
+                                                "name": p1.iloc[0]["name"],
+                                                "contact": contact_1,
+                                                "gender": p1.iloc[0]["gender"],
+                                            },
+                                            "p2": {
+                                                "name": p2.iloc[0]["name"],
+                                                "contact": contact_2,
+                                                "gender": p2.iloc[0]["gender"],
+                                            },
+                                            "is_mixed": is_mixed_event,
                                         }
+                                        st.info("Please confirm the pair details below ⬇️")
 
-                                        ok = save_partner_pair(pair)
-                                        if ok:
-                                            st.success(
-                                                f"Pair registered successfully: "
-                                                f"{pair['player1_name']} & {pair['player2_name']} ({house1})"
-                                            )
-                                            st.rerun()
 
-                    # ---------- Existing pairs ----------
-                    st.markdown("---")
-                    st.markdown("### 📋 Existing Pairs for this Event")
+                    # --- Confirmation Card ---
+                    if st.session_state.pending_pair:
 
-                    pairs_df = load_pairs_for_event(selected_event)
-                    if pairs_df.empty:
-                        st.info("No pairs registered yet for this event.")
-                    else:
-                        show_cols = [
-                            c for c in [
-                                "house", "player1_name", "player1_contact",
-                                "player2_name", "player2_contact"
-                            ] if c in pairs_df.columns
-                        ]
-                        st.dataframe(pairs_df[show_cols], use_container_width=True)
-    else:
-        st.info("Please select a doubles event to proceed.")
+                        pair = st.session_state.pending_pair
+                        colA, colB = st.columns(2)
+
+                        with colA:
+                            st.markdown(f"""
+                            ### 🎾 Confirm Pair
+                            **Event:** {pair['event']}  
+                            **House:** {pair['house']}  
+                            **Type:** {'Mixed Doubles' if pair['is_mixed'] else 'Doubles'}
+                            """)
+
+                        with colB:
+                            st.markdown("""
+                            <style>
+                            .confirm-box {
+                                background: #fffaf0;
+                                padding: 12px;
+                                border: 1px dashed #FF9800;
+                                border-radius: 6px;
+                            }
+                            </style>
+                            """, unsafe_allow_html=True)
+
+                            st.markdown("<div class='confirm-box'>", unsafe_allow_html=True)
+                            st.markdown(f"**Player-1:** {pair['p1']['name']} ({pair['p1']['gender']})  \n📞 {pair['p1']['contact']}")
+                            st.markdown("---")
+                            st.markdown(f"**Player-2:** {pair['p2']['name']} ({pair['p2']['gender']})  \n📞 {pair['p2']['contact']}")
+                            st.markdown("</div>", unsafe_allow_html=True)
+
+                        c1, c2 = st.columns([1, 1])
+                        with c1:
+                            if st.button("❌ Cancel", key="cancel_pair"):
+                                st.session_state.pending_pair = None
+                                st.rerun()
+
+                        with c2:
+                            if st.button("✅ Confirm & Save Pair", key="confirm_pair"):
+                                pair_data = {
+                                    "player1_name": pair['p1']['name'],
+                                    "player1_contact": pair['p1']['contact'],
+                                    "player2_name": pair['p2']['name'],
+                                    "player2_contact": pair['p2']['contact'],
+                                    "event_name": pair['event'],
+                                    "house": pair['house'],
+                                }
+                                ok = save_partner_pair(pair_data)
+                                st.session_state.pending_pair = None
+                                if ok:
+                                    st.success("Pair saved successfully!")
+                                    st.balloons()
+                                    st.rerun()
+
+    # =========================
+    # TAB 2: View Registered Pairs
+    # =========================
+    with tab_view:
+        st.subheader("📜 View Registered Doubles Pairs")
+
+        view_event = st.selectbox(
+            "Select Doubles Event",
+            doubles_events,
+            key="view_dbl_event"
+        )
+
+        if view_event:
+            pairs_df = load_pairs_for_event(view_event)
+
+            if pairs_df.empty:
+                st.info("No pairs registered yet for this event.")
+            else:
+                # Show a cleaner table
+                display_cols = [
+                    "event_name",
+                    "house",
+                    "player1_name",
+                    "player1_contact",
+                    "player2_name",
+                    "player2_contact",
+                ]
+                display_df = pairs_df[display_cols].rename(
+                    columns={
+                        "event_name": "Event",
+                        "house": "House",
+                        "player1_name": "Player 1",
+                        "player1_contact": "Contact 1",
+                        "player2_name": "Player 2",
+                        "player2_contact": "Contact 2",
+                    }
+                )
+
+                st.dataframe(display_df, use_container_width=True)
+
 
 # ---------------------
 # Footer note
@@ -2548,6 +2593,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
