@@ -2417,6 +2417,7 @@ if menu == "Doubles Partner Selection":
                 st.warning("No participants available.")
             else:
                 # Only participants who selected this event AND are Approved
+                
                 event_mask = all_df["All Selected Events"].apply(
                     lambda s: is_registered_for_event(s, selected_event)
                 )
@@ -2604,6 +2605,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
