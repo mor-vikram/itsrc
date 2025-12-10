@@ -543,6 +543,15 @@ def load_all_pairs():
         st.error(f"Error loading doubles pairs: {e}")
         return pd.DataFrame()
 
+def is_registered_for_event(all_events_str: str, target_event: str) -> bool:
+    """
+    Safely check if target_event is in the comma-separated All Selected Events.
+    Matching is exact, case-insensitive, and ignores extra spaces.
+    """
+    if not isinstance(all_events_str, str):
+        return False
+    events = [e.strip().lower() for e in all_events_str.split(",") if e.strip()]
+    return target_event.strip().lower() in events
 
 
 def delete_partner_pair(pair_id):
@@ -2188,9 +2197,11 @@ if menu == "Insight":
                 if "fee" in filtered_df.columns:
                     total_fee = filtered_df["fee"].sum()
                     avg_fee = filtered_df["fee"].mean()
-                    c1, c2 = st.columns(2)
+                    collected_fee = filtered_df[filtered_df["fee_collected"] == True]["fee"].sum() if "fee_collected" in filtered_df.columns else 0
+                    c1, c2, c3= st.columns(3)
                     c1.metric("Total Fee (by selection)", f"₹{int(total_fee)}")
-                    c2.metric("Average Fee per Participant", f"₹{avg_fee:0.0f}")
+                    c2.metric("Collected Fee(Approved)", f"₹{int(collected_fee)}")
+                    c3.metric("Average Fee per Participant", f"₹{avg_fee:0.0f}")
 
                     # Fee by house
                     if "house" in filtered_df.columns:
@@ -2406,8 +2417,8 @@ if menu == "Doubles Partner Selection":
                 st.warning("No participants available.")
             else:
                 # Only participants who selected this event AND are Approved
-                event_mask = all_df["All Selected Events"].str.contains(
-                    selected_event, na=False, case=False
+                event_mask = all_df["All Selected Events"].apply(
+                    lambda s: is_registered_for_event(s, selected_event)
                 )
                 status_mask = all_df["status"].fillna("Pending") == "Approved"
                 filtered = all_df[event_mask & status_mask]
@@ -2593,6 +2604,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
