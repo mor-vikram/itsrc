@@ -2199,7 +2199,7 @@ if menu == "Insight":
                     avg_fee = filtered_df["fee"].mean()
                     collected_fee = filtered_df[filtered_df["fee_collected"] == True]["fee"].sum() if "fee_collected" in filtered_df.columns else 0
                     c1, c2, c3= st.columns(3)
-                    c1.metric("Total Fee (by selection)", f"₹{int(total_fee)}")
+                    c1.metric("Total Fee (by Registration)", f"₹{int(total_fee)}")
                     c2.metric("Collected Fee(Approved)", f"₹{int(collected_fee)}")
                     c3.metric("Average Fee per Participant", f"₹{avg_fee:0.0f}")
 
@@ -2604,6 +2604,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
