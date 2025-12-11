@@ -1486,7 +1486,7 @@ if menu == "Already Registered (Re-print/Modify)":
                     if selected_events[category] and category not in selected_categories:
                         selected_categories.add(category)
 
-                
+
                 st.write(f"**Total Fee:** Rs.{total_fee}")
 
                 save_changes = st.form_submit_button("💾 Save Changes")
@@ -2605,6 +2605,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
