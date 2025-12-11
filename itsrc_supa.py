@@ -1466,8 +1466,38 @@ if menu == "Already Registered (Re-print/Modify)":
                 if age < 45:
                     st.info("Note: Veteran categories (45 years and above) are hidden because your age is under 45.")
 
+                # constants
+                BASE_FEE = 250
+                LATE_FEE = 150
+                CUTOFF = datetime(2025, 12, 10, 23, 59, 59)  # last date inclusive
+
+                # helper to parse date string formats we might have saved
+                def _parse_date(s):
+                    if not s:
+                        return None
+                    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d-%m-%Y", "%d-%m-%Y %H:%M:%S"):
+                        try:
+                            return datetime.strptime(s, fmt)
+                        except Exception:
+                            pass
+                    return None
+
+                # Decide whether late fee was applied originally.
+                # Prefer the saved fee (so edit doesn't change it unexpectedly).
+                saved_fee = reg.get("fee", None)
+                reg_date_str = reg.get("date_of_reg", None)
+                reg_dt = _parse_date(reg_date_str)
+
+                # If saved fee present, use it as starting value.
+                if saved_fee is not None:
+                    total_fee = int(saved_fee)
+                else:
+                    # fallback: compute by checking registration date (if present) else current time
+                    check_dt = reg_dt or datetime.now()
+                    total_fee = BASE_FEE + (LATE_FEE if check_dt > CUTOFF else 0)
+
+                # Build selected_events UI (same as registration) but with defaults from DB
                 selected_events = {}
-                total_fee = 250  # base fee
                 selected_categories = set()
 
                 for category, events in event_details.items():
@@ -1483,11 +1513,16 @@ if menu == "Already Registered (Re-print/Modify)":
                         key=f"edit_event_{category.replace(' ', '_')}"
                     )
 
-                    if selected_events[category] and category not in selected_categories:
-                        selected_categories.add(category)
+                    # If you want to recalc fee based on category selections on edit,
+                    # uncomment the block below — currently we *preserve saved fee* unless you want recompute.
+                    #
+                    # if selected_events[category] and category not in selected_categories:
+                    #     total_fee += event_fees.get(category, 0)
+                    #     selected_categories.add(category)
 
-
+                # show the fee that will be saved (preserved from DB or computed default)
                 st.write(f"**Total Fee:** Rs.{total_fee}")
+
 
                 save_changes = st.form_submit_button("💾 Save Changes")
 
@@ -2605,6 +2640,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
