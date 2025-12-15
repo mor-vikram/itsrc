@@ -1161,7 +1161,7 @@ if menu == "Participant Registration":
     st.write("Welcome! You can register for events")
 
     # ---- Global last date for normal registration ----
-    LAST_REG_DATE = datetime(2025, 12, 10).date()   # <-- change date here if needed
+    LAST_REG_DATE = datetime(2025, 12, 16).date()   # <-- change date here if needed
 
     # Optional message
     st.markdown(
@@ -1469,7 +1469,7 @@ if menu == "Already Registered (Re-print/Modify)":
                 # constants
                 BASE_FEE = 250
                 LATE_FEE = 150
-                CUTOFF = datetime(2025, 12, 10, 23, 59, 59)  # last date inclusive
+                CUTOFF = datetime(2025, 12, 16, 23, 59, 59)  # last date inclusive
 
                 # helper to parse date string formats we might have saved
                 def _parse_date(s):
@@ -2640,6 +2640,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
