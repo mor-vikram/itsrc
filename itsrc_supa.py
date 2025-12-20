@@ -1849,22 +1849,121 @@ if menu == "Admin Dashboard":
             # Event-wise participants tab (last tab)
             with tab_objs[tabs.index("Event-wise List")]:
                 st.subheader("📜 Event-wise Participant List")
-                event_data = all_participants_df if role == "Super Admin" else (all_participants_df[all_participants_df["house"] == house_name] if not all_participants_df.empty else pd.DataFrame())
+
+                event_data = (
+                    all_participants_df
+                    if role == "Super Admin"
+                    else all_participants_df[all_participants_df["house"] == house_name]
+                    if not all_participants_df.empty
+                    else pd.DataFrame()
+                )
 
                 if event_data.empty:
                     st.warning("No registration data available.")
                 else:
+                    # explode events
                     event_data["All Selected Events"] = event_data["All Selected Events"].fillna("")
-                    exploded = event_data.assign(Event=event_data["All Selected Events"].str.split(", ")).explode("Event")
-                    event_list = exploded["Event"].dropna().unique().tolist()
+                    exploded = event_data.assign(
+                        Event=event_data["All Selected Events"].str.split(", ")
+                    ).explode("Event")
+
+                    event_list = sorted(exploded["Event"].dropna().unique().tolist())
                     selected_event = st.selectbox("Select Event", options=event_list)
+
                     if selected_event:
                         filtered = exploded[exploded["Event"] == selected_event]
-                        filtered_filtered = filtered.drop(columns=["tshirt_size", "Selected Events", "all_selected_events", "fee"], errors="ignore")
-                        st.write(f"### Participants for {selected_event}")
-                        st.dataframe(filtered_filtered)
-                        st.download_button(label=f"Download {selected_event} Participants", data=filtered_filtered.to_csv(index=False).encode("utf-8"), file_name=f"{selected_event.replace(' ', '_')}_Participants.csv", mime="text/csv")
 
+                        # -------- Relevant Columns Only --------
+                        cols = [
+                            "Event",
+                            "name",
+                            "house",
+                            "designation",
+                            "gender",
+                            "age",
+                            "contact",
+                            "status",
+                        ]
+                        cols = [c for c in cols if c in filtered.columns]
+
+                        display_df = filtered[cols].rename(
+                            columns={
+                                "Event": "Event",
+                                "name": "Name",
+                                "house": "House",
+                                "designation": "Designation",
+                                "gender": "Gender",
+                                "age": "Age",
+                                "contact": "Contact",
+                                "status": "Status",
+                            }
+                        )
+
+                        st.write(f"### Participants for **{selected_event}**")
+                        st.dataframe(display_df, use_container_width=True)
+
+                        # -------- Event-wise CSV (ONLY selected event) --------
+                        st.download_button(
+                            label=f"⬇️ Download {selected_event} Participants (CSV)",
+                            data=display_df.to_csv(index=False).encode("utf-8"),
+                            file_name=f"{selected_event.replace(' ', '_')}_participants.csv",
+                            mime="text/csv",
+                        )
+
+                        # =====================================================
+                        # 🤝 DOUBLES / MIXED DOUBLES – Partner-wise CSV
+                        # =====================================================
+                        if "double" in selected_event.lower():
+                            st.markdown("---")
+                            st.subheader("🤝 Doubles Pair List")
+
+                            pairs_df = load_all_pairs()
+
+                            required_cols = {"player1_name", "player2_name", "event_name", "house"}
+                            if not required_cols.issubset(pairs_df.columns):
+                                st.error("❌ Doubles table schema mismatch.")
+                                st.stop()
+
+                            if not pairs_df.empty:
+                                pairs_df["Doubles Pair"] = (
+                                    pairs_df["player1_name"].str.strip()
+                                    + " + "
+                                    + pairs_df["player2_name"].str.strip()
+                                )
+
+
+                            if pairs_df.empty:
+                                st.info("No doubles pairs registered.")
+                            else:
+                                # Filter by selected event
+                                pairs_df = pairs_df[pairs_df["event_name"] == selected_event]
+
+
+                                # House admin scope
+                                if role != "Super Admin":
+                                    pairs_df = pairs_df[pairs_df["house"] == house_name]
+
+                                if pairs_df.empty:
+                                    st.info("No doubles pairs found for this event.")
+                                else:
+                                    
+
+                                    pairs_export = (
+                                        pairs_df[["event_name", "Doubles Pair", "house"]]
+                                        .drop_duplicates()
+                                        .rename(columns={
+                                            "event_name": "Event",
+                                            "house": "House"
+                                        })
+                                    )
+
+                                    st.dataframe(pairs_export)
+                                    st.download_button(
+                                        label="⬇️ Download Doubles Pairs (CSV)",
+                                        data=pairs_export.to_csv(index=False).encode("utf-8"),
+                                        file_name=f"{selected_event.replace(' ', '_')}_Doubles_Pairs.csv",
+                                        mime="text/csv"
+                                    )
 
             # =======================
             # Doubles Pairs Admin Tab
@@ -2640,6 +2739,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
