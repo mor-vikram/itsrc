@@ -1158,11 +1158,24 @@ if menu == "Admin Login":
 if menu == "Participant Registration":
     st.title("🏅 Sports Event Registration")
     st.subheader("Organized by Income Tax Sports & Recreation Club, Vadodara")
-    st.write("Welcome! You can register for events")
+    #st.write("Welcome! You can register for events")
 
     # ---- Global last date for normal registration ----
     LAST_REG_DATE = datetime(2025, 12, 16).date()   # <-- change date here if needed
+    REGISTRATION_DEADLINE = datetime(2025, 12, 20)
+    today = datetime.today()
 
+    if today > REGISTRATION_DEADLINE:
+        st.error("🚫 Registration Closed")
+        st.markdown(
+            """
+            ❌ **Participant registration is closed.**  
+            The last date for registration was **20-12-2025**.
+
+            📌 Please contact your **House In-charge / Organising Committee** for any queries.
+            """
+        )
+        st.stop()
     # Optional message
     st.markdown(
         f"<span style='color: red; font-weight: bold;'>"
@@ -2739,6 +2752,7 @@ st.markdown("Built with ❤️ — ITSRC Vadodara IT Sports Committee 2025-26")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # ---------------------
+
 
 
 
