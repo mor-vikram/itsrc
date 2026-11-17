@@ -138,7 +138,7 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
         logo = None
 
     # === QR Code ===
-    base_url = st.secrets.get("APP_BASE_URL", "http://itsrc2025.streamlit.app")
+    base_url = st.secrets.get("APP_BASE_URL", "http://itsrcbrc.streamlit.app")
     verification_url = participant_data.get(
         "verification_url",
         f"{base_url}/?verify_id={participant_data.get('id','')}"
@@ -151,7 +151,7 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
     qr = Image(qr_buffer, width=70, height=70)
 
     # === Header Layout (Logo | Title | QR) ===
-    header_table_data = [[logo, Paragraph("<b>ITSRC, Vadodara Annual Sports @ 2025</b>", header_style), qr]]
+    header_table_data = [[logo, Paragraph("<b>Income Tax Sports & Recreation Club, Vadodara </b>", header_style), qr]]
     header_table = Table(header_table_data, colWidths=[80, 380, 80])
     header_table.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -159,7 +159,7 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
         ('BOTTOMPADDING', (0, 0), (-1, -1), 8)
     ]))
     story.append(header_table)
-    story.append(Paragraph("(Sports Events @2025-26)", subtitle_style))
+    story.append(Paragraph("(Sports Events @2026-27)", subtitle_style))
     story.append(Paragraph("Participant Registration Form", form_title_style))
     story.append(Spacer(1, 15))
 
