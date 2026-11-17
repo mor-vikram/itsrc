@@ -138,7 +138,7 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
         logo = None
 
     # === QR Code ===
-    base_url = st.secrets.get("APP_BASE_URL", "http://itsrcbrc.streamlit.app")
+    base_url = st.secrets.get("APP_BASE_URL", "http://itsrcvadodara.streamlit.app")
     verification_url = participant_data.get(
         "verification_url",
         f"{base_url}/?verify_id={participant_data.get('id','')}"
