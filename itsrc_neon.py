@@ -851,9 +851,10 @@ def save_partner_pair(part):
         st.error(f"Error saving partner pair: {e}")
         return False
 
-def load_pairs_for_event(event_name):
+def load_pairs_for_event(event_name, season=None):
     try:
-        resp = neon_client.table("doubles_partners").select("*").eq("event_name", event_name).eq("season", selected_season()).execute()
+        season = season or selected_season()
+        resp = neon_client.table("doubles_partners").select("*").eq("event_name", event_name).eq("season", season).execute()
         data = resp.data or []
         return pd.DataFrame(data) if data else pd.DataFrame()
     except Exception as e:
@@ -862,15 +863,16 @@ def load_pairs_for_event(event_name):
 
 # ---------- Doubles helpers ----------
 
-def load_all_pairs():
-    """Load all doubles pairs from the doubles_partners table."""
+def load_all_pairs(season=None):
+    """Load doubles pairs for the requested season (admin view defaults to selected season)."""
     try:
+        season = season or selected_season()
         # If your table doesn't have created_at, order by id instead
         resp = (
             neon_client
             .table("doubles_partners")
             .select("*")
-            .eq("season", selected_season())
+            .eq("season", season)
             .order("id", desc=False)   # <-- changed from created_at to id
             .execute()
         )
@@ -1713,6 +1715,148 @@ if menu == "Participant Registration":
             except Exception as exc:
                 st.session_state["registration_submitting"] = False
                 st.error(f"Registration failed: {exc}")
+
+# ---------------------
+# Doubles Partner Selection / Registration (Neon)
+# ---------------------
+if menu == "Doubles Partner Selection":
+    st.title("🤝 Doubles Partner Registration")
+    st.caption(f"ITSRC Sports Meet · {CURRENT_SEASON}")
+    st.markdown("Choose an event, select two approved participants from the same house, review the pair and confirm registration.")
+
+    doubles_events = list(dict.fromkeys(
+        event for group_events in event_details.values()
+        for event in group_events if "doubles" in event.lower()
+    ))
+
+    if not doubles_events:
+        st.warning("No doubles events are configured for this season.")
+    else:
+        reg_tab, view_tab = st.tabs(["➕ Register a Pair", "📋 Registered Pairs"])
+
+        with reg_tab:
+            st.info("Both players must be approved for the selected event and belong to the same house. Mixed Doubles permits one male and one female player.")
+            event = st.selectbox("🏅 Select doubles event", doubles_events, key="dbl_event_neon")
+            participants = load_all_participants_df(season=CURRENT_SEASON)
+
+            if participants.empty:
+                st.warning("No participant registrations were found for this season.")
+            else:
+                # Normalize expected columns from the participants table.
+                if "All Selected Events" not in participants.columns and "all_selected_events" in participants.columns:
+                    participants["All Selected Events"] = participants["all_selected_events"]
+                if "contact" not in participants.columns and "Contact" in participants.columns:
+                    participants["contact"] = participants["Contact"]
+                if "status" not in participants.columns:
+                    participants["status"] = "Pending"
+
+                required = {"name", "house", "gender", "contact", "status", "All Selected Events"}
+                missing = required - set(participants.columns)
+                if missing:
+                    st.error("Participant data is missing required columns: " + ", ".join(sorted(missing)))
+                else:
+                    approved = participants[
+                        participants["status"].fillna("Pending").astype(str).str.strip().str.lower().eq("approved")
+                        & participants["All Selected Events"].apply(lambda value: is_registered_for_event(value, event))
+                    ].copy()
+                    approved["contact"] = approved["contact"].astype(str).str.strip()
+                    approved = approved[approved["contact"].ne("")].drop_duplicates(subset=["contact"])
+
+                    if approved.empty:
+                        st.warning("No approved participants have registered for this event yet.")
+                    elif len(approved) < 2:
+                        st.warning("At least two approved participants are required to register a pair.")
+                    else:
+                        st.caption(f"{len(approved)} eligible participant(s) found")
+                        with st.expander("👥 View eligible participants", expanded=False):
+                            show_cols = [c for c in ["name", "house", "gender", "contact"] if c in approved.columns]
+                            st.dataframe(approved[show_cols].rename(columns={"name":"Participant", "house":"House", "gender":"Gender", "contact":"Mobile"}), use_container_width=True, hide_index=True)
+
+                        def _candidate_label(row):
+                            return f"{row['name']} · {row['house']} · {row['gender']} · {row['contact']}"
+
+                        candidate_rows = {str(row["contact"]): row for _, row in approved.iterrows()}
+                        contact_options = list(candidate_rows.keys())
+                        labels = {contact: _candidate_label(row) for contact, row in candidate_rows.items()}
+                        col_a, col_b = st.columns(2)
+                        with col_a:
+                            contact_1 = st.selectbox("🥇 Player 1", contact_options, format_func=lambda value: labels[value], key="dbl_player1_neon")
+                        with col_b:
+                            second_options = [value for value in contact_options if value != contact_1]
+                            contact_2 = st.selectbox("🥈 Player 2", second_options, format_func=lambda value: labels[value], key="dbl_player2_neon")
+
+                        p1, p2 = candidate_rows[contact_1], candidate_rows[contact_2]
+                        st.markdown(f"**Selected house:** {p1['house']}  ·  **Event type:** {'Mixed Doubles' if 'mixed' in event.lower() else 'Standard Doubles'}")
+
+                        if st.button("🔍 Review Pair", key="dbl_review_neon", type="primary", use_container_width=True):
+                            error = None
+                            if str(p1["house"]).strip() != str(p2["house"]).strip():
+                                error = "Both participants must belong to the same house."
+                            elif "mixed" not in event.lower() and str(p1["gender"]).strip().lower() != str(p2["gender"]).strip().lower():
+                                error = "Standard doubles requires partners of the same gender. Please choose a Mixed Doubles event for a male–female pair."
+                            elif "mixed" in event.lower() and {str(p1["gender"]).strip().lower(), str(p2["gender"]).strip().lower()} != {"male", "female"}:
+                                error = "Mixed Doubles requires exactly one male and one female participant."
+                            else:
+                                existing = load_pairs_for_event(event, season=CURRENT_SEASON)
+                                if not existing.empty and {contact_1, contact_2} in [
+                                    {str(row.get("player1_contact", "")).strip(), str(row.get("player2_contact", "")).strip()}
+                                    for _, row in existing.iterrows()
+                                ]:
+                                    error = "This pair is already registered for this event."
+                            if error:
+                                st.session_state.pop("pending_pair_neon", None)
+                                st.error(error)
+                            else:
+                                st.session_state["pending_pair_neon"] = {
+                                    "event": event, "house": str(p1["house"]),
+                                    "p1": {"name": str(p1["name"]), "contact": contact_1, "gender": str(p1["gender"])},
+                                    "p2": {"name": str(p2["name"]), "contact": contact_2, "gender": str(p2["gender"])},
+                                }
+
+                        pair = st.session_state.get("pending_pair_neon")
+                        if pair and pair.get("event") == event:
+                            st.markdown("#### ✅ Confirm pair details")
+                            left, right = st.columns(2)
+                            with left:
+                                st.markdown(f"**{pair['p1']['name']}**\n\n{pair['p1']['gender']} · {pair['p1']['contact']}")
+                            with right:
+                                st.markdown(f"**{pair['p2']['name']}**\n\n{pair['p2']['gender']} · {pair['p2']['contact']}")
+                            st.caption(f"{pair['event']} · {pair['house']} · {CURRENT_SEASON}")
+                            confirm_col, cancel_col = st.columns(2)
+                            with confirm_col:
+                                if st.button("💾 Confirm & Register Pair", key="dbl_confirm_neon", type="primary", use_container_width=True):
+                                    payload = {
+                                        "player1_name": pair["p1"]["name"], "player1_contact": pair["p1"]["contact"],
+                                        "player2_name": pair["p2"]["name"], "player2_contact": pair["p2"]["contact"],
+                                        "event_name": pair["event"], "house": pair["house"],
+                                    }
+                                    if save_partner_pair(payload):
+                                        st.session_state.pop("pending_pair_neon", None)
+                                        st.success("Doubles pair registered successfully!")
+                                        st.balloons()
+                                        st.rerun()
+                            with cancel_col:
+                                if st.button("Cancel", key="dbl_cancel_neon", use_container_width=True):
+                                    st.session_state.pop("pending_pair_neon", None)
+                                    st.rerun()
+
+        with view_tab:
+            view_event = st.selectbox("🏅 Filter by event", ["All Doubles Events"] + doubles_events, key="dbl_view_event_neon")
+            pairs = load_all_pairs(season=CURRENT_SEASON)
+            if pairs.empty:
+                st.info("No doubles pairs have been registered for this season yet.")
+            else:
+                if view_event != "All Doubles Events":
+                    pairs = pairs[pairs["event_name"].astype(str).eq(view_event)]
+                if pairs.empty:
+                    st.info("No pairs found for this event.")
+                else:
+                    display = pairs.copy()
+                    display["Pair"] = display["player1_name"].astype(str) + " + " + display["player2_name"].astype(str)
+                    display = display[["event_name", "Pair", "house"]].rename(columns={"event_name":"Event", "house":"House"})
+                    st.dataframe(display, use_container_width=True, hide_index=True)
+                    st.download_button("⬇️ Download pair list (CSV)", display.to_csv(index=False).encode("utf-8"), file_name=f"doubles_pairs_{CURRENT_SEASON}.csv", mime="text/csv")
+
 
 # ---------------------
 # Already Registered (Search + Modify)
