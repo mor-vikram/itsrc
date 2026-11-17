@@ -39,14 +39,15 @@ st.set_page_config(
 )
 
 if "active_page" not in st.session_state:
-    st.session_state.active_page = "Participant Registration"
+    initial_page = st.query_params.get("page", "Participant Registration")
+    st.session_state.active_page = initial_page
 
 # --- Safely load and encode logo.jpg ---
 logo_path = Path("its.gif")
 if logo_path.exists():
     with open(logo_path, "rb") as f:
         logo_base64 = base64.b64encode(f.read()).decode()
-    logo_img_html = f'<img src="data:image/png;base64,{logo_base64}" alt="ITSRC Logo" class="nav-logo">'
+    logo_img_html = f'<img src="data:image/gif;base64,{logo_base64}" alt="ITSRC emblem" class="nav-logo">'
 else:
     logo_img_html = '<div style="font-weight:bold;font-size:18px;color:#00695c;">ITSRC</div>'
 
@@ -61,193 +62,182 @@ menu_items = [
     "Doubles Partner Selection",
     "Leadership Board"
 ]
-##Header 3 style
-st.markdown("""
-    <style>
-    /* Change the font style for all subheaders */
-    h3 {
-        font-family: 'Poppins', sans-serif;
-        color: #008080; /* teal */
-        font-weight: 600;
-        letter-spacing: 0.5px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- Style ---
-# --- Global header + menu style ---
+## Professional ITSRC header and navigation styling
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap');
 
-    /* Header logos (left & right) */
-    .nav-logo {
-        height: 150px;
-        width: 150px;
-        border-radius: 8px;
-        object-fit: contain;
-    }
-
-    /* Big centered title */
-    .navbar-title {
-        font-family: 'Poppins', sans-serif;
-        font-size: 40px;
-        font-weight: 700;
-        color: #004d40;
-        text-align: center;
-        margin-top: 16px;
-        margin-bottom: 4px;
-    }
-
-    /* Teal strip under the title */
-    .navbar {
-        width: 100%;
-        height: 10px;
-        background-color: #00bfa6;
-        margin-top: 4px;
-        margin-bottom: 24px;
-    }
-
-    /* Center contents of st.columns used for the menu row */
-    div[data-testid="stHorizontalBlock"] > div {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    /* Uniform menu buttons */
-    .stButton button {
-        background-color: #D3AF37 !important;
-        color: #004d40 !important;
-        font-weight: 700 !important;
-        font-size: 15px !important;
-        border-radius: 10px !important;
-        border: 2px solid #00bfa6 !important;
-        box-shadow: 0 0 10px #00bfa6;
-        transition: box-shadow 0.3s ease-in-out;
-        /* same size for all buttons */
-        width: 170px !important;
-        height: 55px !important;
-
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        text-align: center !important;
-
-        line-height: 1.2 !important;
-        white-space: normal !important;   /* allow 2-line labels cleanly */
-        overflow-wrap: break-word;
-        border: none !important;
-        margin-top: 8px !important;
-    }
-
-    .stButton button:hover {
-        background-color: #ffe082 !important;
-        color: black !important;
-    }
-
-    /* Hover effect for normal (non-active) menu buttons */
-    .stButton button:hover {
-        background-color: #e8d175 !important;   /* lighter gold */
-        border: 2px solid #00bfa6 !important;
-        transform: scale(1.02);
-        transition: 0.2s ease;
-    }
-        
-
-    /* 🔹 Active (selected) menu button styling */
-    .active-btn button {
-        background-color: #004d40 !important;
-        color: #ffffff !important;
-        border: 2px solid #00c9a7 !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.15);
-        transform: scale(1.03);
-        transition: all 0.2s ease-in-out;
-    }
-
-
-</style>
-""", unsafe_allow_html=True)
-
-# --- Style --- Tabs as Buttons ---
-st.markdown("""
-<style>
-
-/* 🔹 Make all st.tabs look like buttons (Admin Dashboard, Insight, etc.) */
-
-.stTabs [data-baseweb="tab-list"] {
-    gap: 0.5rem;                      /* space between "buttons" */
-    border-bottom: none;              /* hide default underline */
+:root {
+  --itsrc-ink: #123b36;
+  --itsrc-teal: #087f73;
+  --itsrc-mint: #dff5ef;
+  --itsrc-gold: #d5ad55;
 }
 
+h3 { font-family: 'Manrope', sans-serif; color: var(--itsrc-teal); font-weight: 700; letter-spacing: .1px; }
+
+/* Main branded masthead */
+.itsrc-masthead {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 22px 30px;
+  margin: 6px 0 18px 0;
+  border: 1px solid rgba(8,127,115,.16);
+  border-radius: 22px;
+  background: linear-gradient(115deg, #f4fbf8 0%, #ffffff 48%, #f8f5e9 100%);
+  box-shadow: 0 10px 30px rgba(18,59,54,.08);
+}
+.itsrc-masthead:after {
+  content: '';
+  position: absolute;
+  width: 260px; height: 260px;
+  right: -85px; top: -150px;
+  border-radius: 50%;
+  background: rgba(8,127,115,.07);
+}
+.itsrc-brand-logo {
+  flex: 0 0 86px;
+  width: 86px; height: 86px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 19px;
+  background: #fff;
+  border: 1px solid rgba(8,127,115,.13);
+  box-shadow: 0 5px 15px rgba(18,59,54,.08);
+  z-index: 1;
+}
+.nav-logo { width: 72px; height: 72px; object-fit: contain; border-radius: 12px; }
+.itsrc-brand-copy { min-width: 0; flex: 1; z-index: 1; }
+.itsrc-eyebrow {
+  color: #087f73; text-transform: uppercase; letter-spacing: 2px;
+  font: 800 10px 'DM Sans', sans-serif; margin-bottom: 5px;
+}
+.itsrc-title {
+  color: #123b36; font: 800 clamp(20px, 2.5vw, 31px) 'Manrope', sans-serif;
+  line-height: 1.16; letter-spacing: -.7px; margin: 0;
+}
+.itsrc-subtitle { color: #52716b; font: 500 13px 'DM Sans', sans-serif; margin-top: 6px; }
+.itsrc-season-pill {
+  z-index: 1; flex: 0 0 auto; padding: 10px 15px;
+  border-radius: 14px; background: #123b36; color: #fff;
+  font: 700 12px 'DM Sans', sans-serif; letter-spacing: .4px;
+  box-shadow: 0 5px 14px rgba(18,59,54,.16); text-align: center;
+}
+.itsrc-season-pill span { display:block; color:#bde8dc; font-size:9px; letter-spacing:1.5px; margin-bottom:3px; }
+.itsrc-header-rule { height: 3px; border-radius: 99px; margin: 0 0 18px 0;
+  background: linear-gradient(90deg, #087f73 0%, #37b89f 55%, #d5ad55 100%); }
+
+/* Compact, consistent navigation buttons */
+.stButton button {
+  min-height: 48px !important; height: auto !important; width: 100% !important;
+  padding: 8px 9px !important; white-space: normal !important;
+  overflow-wrap: anywhere; line-height: 1.2 !important;
+  border-radius: 12px !important; border: 1px solid #cfe3dc !important;
+  background: #f5faf8 !important; color: #164b43 !important;
+  box-shadow: 0 2px 7px rgba(18,59,54,.05) !important;
+  font: 700 12px 'DM Sans', sans-serif !important;
+  transition: all .18s ease !important;
+}
+.stButton button:hover {
+  background: #e1f3ed !important; border-color: #087f73 !important;
+  color: #123b36 !important; transform: translateY(-1px);
+  box-shadow: 0 5px 12px rgba(8,127,115,.12) !important;
+}
+.active-btn button {
+  background: #123b36 !important; color: #fff !important;
+  border: 1px solid #123b36 !important;
+  box-shadow: 0 5px 13px rgba(18,59,54,.18) !important;
+}
+ .active-btn button:hover { background: #0b655a !important; color:#fff !important; }
+
+/* Reliable active navigation state: only the selected main-menu button is
+   rendered as primary inside the uniquely keyed navigation container. */
+.st-key-itsrc_navigation button[kind="primary"],
+.st-key-itsrc_navigation button[data-testid="stBaseButton-primary"] {
+  background: linear-gradient(135deg, #f6df9b 0%, #d5ad55 100%) !important;
+  color: #26352f !important;
+  border: 1px solid #c49a3a !important;
+  box-shadow: 0 5px 15px rgba(181,137,43,.28) !important;
+  font-weight: 800 !important;
+}
+.st-key-itsrc_navigation button[kind="primary"]:hover,
+.st-key-itsrc_navigation button[data-testid="stBaseButton-primary"]:hover {
+  background: linear-gradient(135deg, #f9e8b9 0%, #dfb95f 100%) !important;
+  color: #26352f !important;
+  border-color: #b88a2d !important;
+  transform: translateY(-1px);
+}
+
+/* Keep Streamlit content visually aligned with the new header */
+[data-testid="stHorizontalBlock"] { gap: .55rem; }
+@media (max-width: 900px) {
+  .itsrc-masthead { gap: 14px; padding: 17px; }
+  .itsrc-brand-logo { flex-basis: 64px; width:64px; height:64px; }
+  .nav-logo { width:54px; height:54px; }
+  .itsrc-season-pill { padding:8px 10px; }
+}
+@media (max-width: 600px) {
+  .itsrc-masthead { flex-wrap: wrap; }
+  .itsrc-brand-copy { flex-basis: calc(100% - 82px); }
+  .itsrc-season-pill { margin-left: 78px; }
+}
+
+.stTabs [data-baseweb="tab-list"] { gap: .5rem; border-bottom: none; }
 .stTabs [data-baseweb="tab"] {
-    background-color: #D3AF37;        /* same gold as your menu buttons */
-    color: #004d40;
-    border-radius: 999px;             /* pill / button shape */
-    padding: 0.4rem 1.1rem;
-    font-weight: 600;
-    font-size: 14px;
-    border: 2px solid #00bfa6;        /* teal border */
-    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
-    cursor: pointer;
+  background: #f1f7f4; color: #164b43; border-radius: 999px;
+  padding: .45rem 1.05rem; font-weight: 700; font-size: 13px;
+  border: 1px solid #cfe3dc; box-shadow: 0 2px 4px rgba(0,0,0,.04);
 }
-
-/* Active tab = filled teal button */
 .stTabs [data-baseweb="tab"][aria-selected="true"] {
-    background-color: #004d40;
-    color: #ffffff;
-    border-color: #00c9a7;
-    box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+  background: #123b36; color: #fff; border-color: #123b36;
+  box-shadow: 0 3px 8px rgba(18,59,54,.16);
 }
-
-/* Hover effect */
-.stTabs [data-baseweb="tab"]:hover {
-    filter: brightness(1.05);
-}
-
+.stTabs [data-baseweb="tab"]:hover { filter: brightness(1.04); }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""<div class='navbar'></div>""", unsafe_allow_html=True)
-# --- Navbar layout ---
-col1, col2, col3 = st.columns([1.5, 6, 1.5])
-with col1:
-    st.markdown(logo_img_html, unsafe_allow_html=True)
-with col2:
-    st.markdown('<div class="navbar-title" style="text-align:center;">Income Tax Sports & Recreation Club, Vadodara</div>', unsafe_allow_html=True)
-    st.markdown('<div class="navbar-title" style="text-align:center;">(Sports Events @2026-27)</div>', unsafe_allow_html=True)
-with col3:
-    st.markdown(logo_img_html, unsafe_allow_html=True)
-
-st.markdown("""<div class='navbar'></div>""", unsafe_allow_html=True)
-
+# --- Branded ITSRC masthead ---
+st.markdown(f"""
+<div class="itsrc-masthead">
+  <div class="itsrc-brand-logo">{logo_img_html}</div>
+  <div class="itsrc-brand-copy">
+    <div class="itsrc-eyebrow">Income Tax Sports & Recreation Club</div>
+    <div class="itsrc-title">ITSRC · Vadodara</div>
+    <div class="itsrc-subtitle">Sports, teamwork, wellness &amp; sporting excellence</div>
+  </div>
+  <div class="itsrc-season-pill"><span>ANNUAL SPORTS MEET</span>2026–27</div>
+</div>
+<div class="itsrc-header-rule"></div>
+""", unsafe_allow_html=True)
 
 # --- Horizontal menu buttons (Streamlit native) ---
 
-menu_cols = st.columns(len(menu_items))
-
-# Decide which page is active
-selected_page = (
-    st.session_state.get("active_page")
-    or st.query_params.get("page", "Participant Registration")
+# Keep the navigation in a uniquely keyed container so the gold active-state
+# CSS applies ONLY to the selected main navigation button.
+selected_page = st.session_state.get("active_page") or st.query_params.get(
+    "page", "Participant Registration"
 )
+if selected_page not in menu_items:
+    selected_page = "Participant Registration"
+    st.session_state.active_page = selected_page
 
-for i, item in enumerate(menu_items):
-    is_active = (item == selected_page)
-
-    with menu_cols[i]:
-        # Wrap active button in a div so CSS .active-btn button applies
-        if is_active:
-            st.markdown("<div class='active-btn'>", unsafe_allow_html=True)
-
-        clicked = st.button(item, key=f"menu_{i}", use_container_width=True)
-
-        if is_active:
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        if clicked:
-            st.session_state.active_page = item
-            st.query_params["page"] = item
-            st.rerun()
+with st.container(key="itsrc_navigation"):
+    menu_cols = st.columns(len(menu_items))
+    for i, item in enumerate(menu_items):
+        with menu_cols[i]:
+            is_active = item == selected_page
+            clicked = st.button(
+                item,
+                key=f"menu_{i}",
+                type="primary" if is_active else "secondary",
+                use_container_width=True,
+            )
+            if clicked:
+                st.session_state.active_page = item
+                st.query_params["page"] = item
+                st.rerun()
 
 
 # --- Use selected page as the active menu variable ---
