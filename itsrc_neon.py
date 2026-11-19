@@ -172,6 +172,46 @@ h3 { font-family: 'Manrope', sans-serif; color: var(--itsrc-teal); font-weight: 
   transform: translateY(-1px);
 }
 
+
+/* Admin dashboard custom sub-navigation: same pill-button language on local and Cloud. */
+.st-key-itsrc_admin_subnav [data-testid="stHorizontalBlock"] {
+  gap: .5rem !important;
+  flex-wrap: wrap !important;
+}
+.st-key-itsrc_admin_subnav [data-testid="column"] {
+  min-width: 118px !important;
+}
+.st-key-itsrc_admin_subnav button {
+  min-height: 40px !important;
+  height: auto !important;
+  padding: 7px 10px !important;
+  border-radius: 999px !important;
+  border: 1px solid #cfe3dc !important;
+  background: #f1f7f4 !important;
+  color: #164b43 !important;
+  font: 600 12px 'DM Sans', sans-serif !important;
+  white-space: normal !important;
+  box-shadow: 0 2px 5px rgba(18,59,54,.06) !important;
+}
+.st-key-itsrc_admin_subnav button:hover {
+  background: #e1f3ed !important;
+  color: #123b36 !important;
+  border-color: #087f73 !important;
+}
+.st-key-itsrc_admin_subnav button[kind="primary"],
+.st-key-itsrc_admin_subnav button[data-testid="stBaseButton-primary"] {
+  background: #123b36 !important;
+  color: #ffffff !important;
+  border-color: #123b36 !important;
+  box-shadow: 0 4px 10px rgba(18,59,54,.18) !important;
+  font-weight: 800 !important;
+}
+.st-key-itsrc_admin_subnav button[kind="primary"]:hover,
+.st-key-itsrc_admin_subnav button[data-testid="stBaseButton-primary"]:hover {
+  background: #0b655a !important;
+  color: #ffffff !important;
+}
+
 /* Keep Streamlit content visually aligned with the new header */
 [data-testid="stHorizontalBlock"] { gap: .55rem; }
 @media (max-width: 900px) {
@@ -2265,15 +2305,25 @@ if menu == "Admin Dashboard":
             pending_tab_label = f"Pending Approvals 🔴 {pending_count}"
             approved_tab_label = f"Approved Forms 🟢 {approved_count}"
 
-            # Tabs vary by Super Admin or house admin.
+            # Custom button-based dashboard navigation (consistent across local and Cloud deployments).
             if role == "Super Admin":
-                tabs = ["Combined Data", "Winners Entry", *houses, "Event-wise List", "Doubles Pairs", pending_tab_label, approved_tab_label, "T-shirt Printing"]
+                admin_tab_keys = ["Combined Data", "Winners Entry", *houses, "Event-wise List", "Doubles Pairs", "Pending Approvals", "Approved Forms", "T-shirt Printing"]
             else:
-                tabs = ["House Data", "Event-wise List", "Doubles Pairs", pending_tab_label, approved_tab_label, "T-shirt Printing"]
+                admin_tab_keys = ["House Data", "Event-wise List", "Doubles Pairs", "Pending Approvals", "Approved Forms", "T-shirt Printing"]
+            admin_tab_display = {"Pending Approvals": pending_tab_label, "Approved Forms": approved_tab_label}
+            if st.session_state.get("admin_dashboard_active_tab") not in admin_tab_keys:
+                st.session_state["admin_dashboard_active_tab"] = admin_tab_keys[0]
+            active_admin_tab = st.session_state["admin_dashboard_active_tab"]
+            with st.container(key="itsrc_admin_subnav"):
+                nav_cols = st.columns(len(admin_tab_keys), gap="small")
+                for nav_index, nav_key in enumerate(admin_tab_keys):
+                    nav_label = admin_tab_display.get(nav_key, nav_key)
+                    safe_nav_key = re.sub(r"[^A-Za-z0-9]+", "_", nav_key)
+                    if nav_cols[nav_index].button(nav_label, key=f"admin_subnav_{nav_index}_{safe_nav_key}", type="primary" if active_admin_tab == nav_key else "secondary", use_container_width=True):
+                        st.session_state["admin_dashboard_active_tab"] = nav_key
+                        st.rerun()
 
-            tab_objs = st.tabs(tabs)
-
-            with tab_objs[tabs.index(pending_tab_label)]:
+            if active_admin_tab == "Pending Approvals":
                 st.subheader("⏳ Pending Registration Approvals")
                 st.caption("Review submitted registrations and approve or reject each form after verification.")
                 pending_df = dashboard_df[dashboard_df["status"].str.strip().str.lower() == "pending"].copy()
@@ -2312,7 +2362,7 @@ if menu == "Admin Dashboard":
                                 st.warning(f"Rejected {participant_name}.")
                                 st.rerun()
 
-            with tab_objs[tabs.index(approved_tab_label)]:
+            if active_admin_tab == "Approved Forms":
                 st.subheader("✅ Approved Registration Forms")
                 st.caption("Approved registrations for the selected season.")
                 approved_df = dashboard_df[dashboard_df["status"].str.strip().str.lower() == "approved"].copy()
@@ -2330,7 +2380,7 @@ if menu == "Admin Dashboard":
                         key="dashboard_approved_download"
                     )
 
-            with tab_objs[tabs.index("T-shirt Printing")]:
+            if active_admin_tab == "T-shirt Printing":
                 st.subheader("👕 T-shirt Printing List")
                 st.caption("Prepare the T-shirt roster and size-wise quantities. Approved registrations are selected by default.")
                 if dashboard_df.empty:
@@ -2355,7 +2405,7 @@ if menu == "Admin Dashboard":
             if role == "Super Admin":
                 if role == "Super Admin":
                     # ----- Tab 0: Combined Data -----
-                    with tab_objs[0]:
+                    if active_admin_tab == "Combined Data":
                         st.subheader("📋 Combined Participants Data")
 
                         if all_participants_df.empty:
@@ -2405,7 +2455,7 @@ if menu == "Admin Dashboard":
                             )
 
                 # Winners entry tab - candidates are fetched from live registration data.
-                with tab_objs[1]:
+                if active_admin_tab == "Winners Entry":
                     st.subheader("🏆 Results & Winners Management")
                     st.caption("Choose an event to load eligible registered participants automatically, then confirm the actual podium finishers.")
 
@@ -2536,7 +2586,7 @@ if menu == "Admin Dashboard":
 
                 # Individual house tabs
                 for i, house in enumerate(houses, start=2):
-                    with tab_objs[i]:
+                    if active_admin_tab == house:
                         df = all_participants_df[all_participants_df["house"] == house] if not all_participants_df.empty else pd.DataFrame()
                         # 🎯 summary for current selection
                         st.subheader("Summary")
@@ -2568,7 +2618,7 @@ if menu == "Admin Dashboard":
                 if not house_name:
                     house_name = role.replace(" Admin", "") if role.endswith(" Admin") else role
 
-                with tab_objs[0]:
+                if active_admin_tab == "House Data":
                     st.subheader(f"📋 {house_name} Participants Data")
 
                     df_house = all_participants_df[all_participants_df["house"] == house_name] if not all_participants_df.empty else pd.DataFrame()
@@ -2625,7 +2675,7 @@ if menu == "Admin Dashboard":
 
 
             # Event-wise participants tab (last tab)
-            with tab_objs[tabs.index("Event-wise List")]:
+            if active_admin_tab == "Event-wise List":
                 st.subheader("📜 Event-wise Participant List")
 
                 event_data = (
@@ -2746,7 +2796,7 @@ if menu == "Admin Dashboard":
             # =======================
             # Doubles Pairs Admin Tab
             # =======================
-            with tab_objs[tabs.index("Doubles Pairs")]:
+            if active_admin_tab == "Doubles Pairs":
                 st.subheader("🎾 Doubles Pairs Management")
 
                 # Load all pairs
