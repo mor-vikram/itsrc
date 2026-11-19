@@ -186,17 +186,51 @@ h3 { font-family: 'Manrope', sans-serif; color: var(--itsrc-teal); font-weight: 
   .itsrc-season-pill { margin-left: 78px; }
 }
 
-.stTabs [data-baseweb="tab-list"] { gap: .5rem; border-bottom: none; }
-.stTabs [data-baseweb="tab"] {
-  background: #f1f7f4; color: #164b43; border-radius: 999px;
-  padding: .45rem 1.05rem; font-weight: 700; font-size: 13px;
-  border: 1px solid #cfe3dc; box-shadow: 0 2px 4px rgba(0,0,0,.04);
+/* Admin/dashboard tabs: support legacy BaseWeb and newer Streamlit DOM. */
+.stTabs [data-baseweb="tab-list"],
+div[data-testid="stTabs"] [role="tablist"] {
+  gap: .5rem !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  flex-wrap: wrap !important;
 }
-.stTabs [data-baseweb="tab"][aria-selected="true"] {
-  background: #123b36; color: #fff; border-color: #123b36;
-  box-shadow: 0 3px 8px rgba(18,59,54,.16);
+.stTabs [data-baseweb="tab"],
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"],
+div[data-testid="stTabs"] button[data-testid="stTab"] {
+  appearance: none !important;
+  background: #f1f7f4 !important;
+  color: #164b43 !important;
+  border: 1px solid #cfe3dc !important;
+  border-radius: 999px !important;
+  padding: .45rem 1.05rem !important;
+  min-height: 38px !important;
+  font-weight: 700 !important;
+  font-size: 13px !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,.04) !important;
+  text-decoration: none !important;
+  transition: background .15s ease, color .15s ease, box-shadow .15s ease !important;
 }
-.stTabs [data-baseweb="tab"]:hover { filter: brightness(1.04); }
+.stTabs [data-baseweb="tab"][aria-selected="true"],
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"][aria-selected="true"],
+div[data-testid="stTabs"] button[data-testid="stTab"][aria-selected="true"] {
+  background: #123b36 !important;
+  color: #fff !important;
+  border-color: #123b36 !important;
+  box-shadow: 0 3px 8px rgba(18,59,54,.16) !important;
+}
+.stTabs [data-baseweb="tab"]:hover,
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]:hover,
+div[data-testid="stTabs"] button[data-testid="stTab"]:hover {
+  background: #e1f3ed !important;
+  color: #123b36 !important;
+  border-color: #087f73 !important;
+}
+.stTabs [data-baseweb="tab"]::after,
+div[data-testid="stTabs"] [role="tablist"] button[role="tab"]::after,
+div[data-testid="stTabs"] button[data-testid="stTab"]::after {
+  display: none !important;
+  content: none !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
