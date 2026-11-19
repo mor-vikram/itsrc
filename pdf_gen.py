@@ -1,14 +1,30 @@
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
-from reportlab.platypus import (
-    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
-)
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+"""
+ITSRC participant registration form PDF generator.
+
+Drop-in replacement for the existing pdf_gen.py.
+Public function signature is intentionally preserved:
+    generate_participant_pdf(participant_data, logo_path, output_path="participant_form.pdf")
+"""
 from io import BytesIO
-import datetime
+from pathlib import Path
+from datetime import datetime, date
+from html import escape
+from zoneinfo import ZoneInfo
+
 import qrcode
-import streamlit as st
-from reportlab.graphics.shapes import Drawing, Rect
+try:
+    import streamlit as st
+except ImportError:
+    st = None
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image,
+    KeepTogether
+)
 
 HOUSE_CAPTAINS = {
     "CC Challengers": "Shri Rakesh Kumar, ITO",
@@ -17,155 +33,158 @@ HOUSE_CAPTAINS = {
     "Investigation Warriors": "Shri Rohit S B Gupta, ITI",
 }
 
+NAVY = colors.HexColor("#17324D")
+TEAL = colors.HexColor("#087E78")
+MINT = colors.HexColor("#EAF5F2")
+PALE = colors.HexColor("#F4F7FA")
+GOLD = colors.HexColor("#D6A642")
+INK = colors.HexColor("#243746")
+MUTED = colors.HexColor("#667785")
+LINE = colors.HexColor("#D8E2E8")
+WHITE = colors.white
+
+
+def _safe(value):
+    """Escape user-supplied text before placing it in a ReportLab Paragraph."""
+    if value is None:
+        return "—"
+    text = str(value).strip()
+    return escape(text) if text else "—"
+
+
+def _registration_datetime(value):
+    """Format registration timestamp in Indian Standard Time where possible."""
+    if not value:
+        return date.today().strftime("%d %b %Y")
+    try:
+        if isinstance(value, datetime):
+            dt = value
+        else:
+            raw = str(value).strip()
+            try:
+                dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                # Preserve an unrecognised but readable date instead of failing PDF creation.
+                return _safe(raw)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(ZoneInfo("Asia/Kolkata"))
+        return dt.strftime("%d %b %Y")
+    except Exception:
+        return _safe(value)
+
+
 def draw_page_border_and_watermark(canvas, doc):
-    """Draws border and watermark."""
+    """Subtle page frame, watermark and footer."""
     width, height = A4
     canvas.saveState()
 
-    # === Border ===
-    margin = 25
-    radius = 15
-    canvas.setStrokeColor(colors.lightgrey)
-    canvas.setLineWidth(1.2)
-    canvas.roundRect(margin, margin, width - 2 * margin, height - 2 * margin, radius)
+    # Soft page frame
+    canvas.setStrokeColor(LINE)
+    canvas.setLineWidth(0.8)
+    canvas.roundRect(11 * mm, 10 * mm, width - 22 * mm, height - 20 * mm, 9, stroke=1, fill=0)
 
-    # === Watermark ===
-    canvas.setFont("Helvetica-Bold", 36)
-    canvas.setFillColorRGB(0.85, 0.85, 0.85, alpha=0.5)
+    # Restrained diagonal watermark
     canvas.saveState()
     canvas.translate(width / 2, height / 2)
-    canvas.rotate(30)
-    canvas.drawCentredString(0, 0, "ITSRC, Vadodara Annual Sports 2026-27")
+    canvas.rotate(32)
+    canvas.setFillColor(colors.HexColor("#E8EFED"))
+    canvas.setFont("Helvetica-Bold", 27)
+    canvas.drawCentredString(0, 0, "ITSRC  •  VADODARA")
     canvas.restoreState()
 
+    # Footer line and label
+    canvas.setStrokeColor(LINE)
+    canvas.setLineWidth(0.6)
+    canvas.line(18 * mm, 17 * mm, width - 18 * mm, 17 * mm)
+    canvas.setFont("Helvetica", 7.5)
+    canvas.setFillColor(MUTED)
+    canvas.drawString(19 * mm, 12.5 * mm, "ITSRC  |  Annual Sports Meet 2026–27")
+    canvas.drawRightString(width - 19 * mm, 12.5 * mm, "Participant Registration Form")
     canvas.restoreState()
 
 
-def generate_participant_pdf(participant_data,logo_path,output_path="participant_form.pdf"):
-    """
-    Generate a styled participant form PDF (A4 portrait) with border, watermark, QR code, and clean layout.
-    """
-
+def _make_qr(verification_url):
+    qr_code = qrcode.QRCode(box_size=5, border=1)
+    qr_code.add_data(verification_url)
+    qr_code.make(fit=True)
+    qr_image = qr_code.make_image(fill_color="#17324D", back_color="white").convert("RGB")
     buffer = BytesIO()
-    pdf = SimpleDocTemplate(
+    qr_image.save(buffer, format="PNG")
+    buffer.seek(0)
+    return Image(buffer, width=21 * mm, height=21 * mm)
+
+
+def generate_participant_pdf(participant_data, logo_path, output_path="participant_form.pdf"):
+    """
+    Generate an A4, print-friendly participant registration form cum receipt.
+    Keeps the original function signature and participant_data field names.
+    """
+    participant_data = participant_data or {}
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        rightMargin=50, leftMargin=50, topMargin=60, bottomMargin=50
-    )
-    story = []
-    styles = getSampleStyleSheet()
-
-    # -------- Custom styles --------
-    title_style = ParagraphStyle(
-        "TitleBig",
-        parent=styles["Title"],
-        fontSize=20,
-        leading=24,
-        alignment=1,  # center
-        textColor=colors.HexColor("#004d40"),
-        spaceAfter=6,
-    )
-    subtitle_style = ParagraphStyle(
-        "Subtitle",
-        parent=styles["Normal"],
-        fontSize=12,
-        leading=16,
-        alignment=1,
-        textColor=colors.HexColor("#00695c"),
-        spaceAfter=4,
-    )
-    form_title_style = ParagraphStyle(
-        "FormTitle",
-        parent=styles["Heading2"],
-        fontSize=14,
-        leading=18,
-        alignment=1,
-        textColor=colors.black,
-        spaceBefore=6,
-        spaceAfter=10,
-    )
-    label_style = ParagraphStyle(
-        "Label",
-        parent=styles["Normal"],
-        fontSize=10.5,
-        leading=13,
-        textColor=colors.HexColor("#004d40"),
-    )
-    value_style = ParagraphStyle(
-        "Value",
-        parent=styles["Normal"],
-        fontSize=10.5,
-        leading=13,
-        textColor=colors.black,
-    )
-    footer_style = ParagraphStyle(
-        "Footer",
-        parent=styles["Normal"],
-        fontSize=10,
-        leading=12,
-    )
-    italic_grey_style = ParagraphStyle(
-        "ItalicGrey",
-        parent=styles["Italic"],
-        fontSize=9,
-        leading=12,
-        textColor=colors.grey,
-        alignment=1,
-    )
-    approved_style = ParagraphStyle(
-        "Approved",
-        parent=styles["Normal"],
-        fontSize=11,
-        leading=14,
-        textColor=colors.HexColor("#000000"),
-        alignment=0,  # left align
-        spaceAfter=6,
+        rightMargin=18 * mm,
+        leftMargin=18 * mm,
+        topMargin=15 * mm,
+        bottomMargin=23 * mm,
+        title="ITSRC Participant Registration Form - Annual Sports Meet 2026-27",
+        author="Income Tax Sports & Recreation Club, Vadodara",
     )
 
-    # === Header Styles ===
-    header_style = ParagraphStyle(
-        'header_style', fontSize=18, alignment=1,
-        spaceAfter=12, leading=22, textColor=colors.darkblue
-    )
-    subheader_style = ParagraphStyle(
-        'subheader_style', fontSize=11, alignment=1, textColor=colors.grey
-    )
+    base = getSampleStyleSheet()
+    styles = {
+        "club": ParagraphStyle(
+            "ClubHeading", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=14, leading=17, textColor=NAVY, alignment=TA_CENTER,
+        ),
+        "event": ParagraphStyle(
+            "EventHeading", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=9, leading=12, textColor=TEAL, alignment=TA_CENTER,
+        ),
+        "form": ParagraphStyle(
+            "FormHeading", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=13, leading=16, textColor=WHITE, alignment=TA_CENTER,
+        ),
+        "section": ParagraphStyle(
+            "SectionHeading", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=9, leading=11, textColor=NAVY,
+        ),
+        "label": ParagraphStyle(
+            "FieldLabel", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=8.5, leading=11, textColor=TEAL,
+        ),
+        "value": ParagraphStyle(
+            "FieldValue", parent=base["Normal"], fontName="Helvetica",
+            fontSize=9.2, leading=12, textColor=INK, wordWrap="CJK",
+        ),
+        "hero_name": ParagraphStyle(
+            "HeroName", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=15, leading=18, textColor=NAVY,
+        ),
+        "hero_house": ParagraphStyle(
+            "HeroHouse", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=10, leading=13, textColor=TEAL,
+        ),
+        "small": ParagraphStyle(
+            "SmallNote", parent=base["Normal"], fontName="Helvetica",
+            fontSize=8, leading=10, textColor=MUTED,
+        ),
+        "approval": ParagraphStyle(
+            "ApprovalTitle", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=9, leading=12, textColor=NAVY,
+        ),
+        "instruction": ParagraphStyle(
+            "Instruction", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=9, leading=12, textColor=NAVY, alignment=TA_CENTER,
+        ),
+        "qr_caption": ParagraphStyle(
+            "QrCaption", parent=base["Normal"], fontName="Helvetica-Bold",
+            fontSize=6.4, leading=7.5, textColor=TEAL, alignment=TA_CENTER,
+        ),
+    }
 
-    # === Logo ===
-    try:
-        logo = Image(logo_path, width=65, height=65)
-    except Exception:
-        logo = None
-
-    # === QR Code ===
-    base_url = st.secrets.get("APP_BASE_URL", "http://itsrcvadodara.streamlit.app")
-    verification_url = participant_data.get(
-        "verification_url",
-        f"{base_url}/?verify_id={participant_data.get('id','')}"
-    )
-
-    qr_img = qrcode.make(verification_url)
-    qr_buffer = BytesIO()
-    qr_img.save(qr_buffer)
-    qr_buffer.seek(0)
-    qr = Image(qr_buffer, width=70, height=70)
-
-    # === Header Layout (Logo | Title | QR) ===
-    header_table_data = [[logo, Paragraph("<b>Income Tax Sports & Recreation Club, Vadodara </b>", header_style), qr]]
-    header_table = Table(header_table_data, colWidths=[80, 380, 80])
-    header_table.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8)
-    ]))
-    story.append(header_table)
-    story.append(Paragraph("(Sports Events @2026-27)", subtitle_style))
-    story.append(Paragraph("Participant Registration Form", form_title_style))
-    story.append(Spacer(1, 15))
-
-    
-
-    # -------- Participant details table --------
     name = participant_data.get("name", "")
     post = participant_data.get("post", "")
     house = participant_data.get("house", "")
@@ -176,97 +195,189 @@ def generate_participant_pdf(participant_data,logo_path,output_path="participant
     gender = participant_data.get("gender", "")
     age = participant_data.get("age", "")
     fee = participant_data.get("fee", "")
-    reg_date = participant_data.get(
-        "registration_date",
-        datetime.date.today().strftime("%d-%m-%Y"),
+    reg_date = _registration_datetime(participant_data.get("registration_date"))
+    captain_name = HOUSE_CAPTAINS.get(str(house), "House Captain")
+    registration_id = participant_data.get("id", "")
+
+    # Base URL lookup is guarded so the module also works outside Streamlit runtime.
+    try:
+        base_url = st.secrets.get("APP_BASE_URL", "http://itsrcvadodara.streamlit.app") if st is not None else "http://itsrcvadodara.streamlit.app"
+    except Exception:
+        base_url = "http://itsrcvadodara.streamlit.app"
+    verification_url = participant_data.get(
+        "verification_url",
+        f"{base_url}/?verify_id={registration_id}"
     )
 
-    data_rows = [
-        [Paragraph("<b>Name</b>", label_style),
-         Paragraph(str(name), value_style)],
-        [Paragraph("<b>House</b>", label_style),
-         Paragraph(str(house), value_style)],
-        [Paragraph("<b>Post Held</b>", label_style),
-         Paragraph(str(post), value_style)],
-        [Paragraph("<b>Posting Details</b>", label_style),
-         Paragraph(str(posting), value_style)],
-        [Paragraph("<b>Contact Number</b>", label_style),
-         Paragraph(str(contact), value_style)],
-        [Paragraph("<b>Gender</b>", label_style),
-         Paragraph(str(gender), value_style)],
-        [Paragraph("<b>Age</b>", label_style),
-         Paragraph(str(age), value_style)],
-        [Paragraph("<b>Category</b>", label_style),
-         Paragraph(str(category), value_style)],
-        [Paragraph("<b>Events Registered</b>", label_style),
-         Paragraph(str(event), value_style)],
-        [Paragraph("<b>Fee</b>", label_style),
-         Paragraph(f"Rs. {fee}", value_style)],
-        [Paragraph("<b>Date of Registration</b>", label_style),
-         Paragraph(str(reg_date), value_style)],
+    # Header: logo | club identity | QR
+    logo = ""
+    try:
+        if logo_path and Path(str(logo_path)).is_file():
+            logo = Image(str(logo_path), width=22 * mm, height=22 * mm, kind="proportional")
+    except Exception:
+        logo = ""
+
+    qr = _make_qr(verification_url)
+    heading = [
+        Paragraph("INCOME TAX SPORTS &amp; RECREATION CLUB", styles["club"]),
+        Paragraph("VADODARA", styles["event"]),
+        Spacer(1, 2),
+        Paragraph("ANNUAL SPORTS MEET 2026–27", styles["event"]),
     ]
-
-    details_table = Table(data_rows, colWidths=[140, 360])
-    details_table.setStyle(TableStyle([
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.lightgrey),
-        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#e0f2f1")),
+    qr_block = [qr, Spacer(1, 1), Paragraph("Scan QR to see<br/>Approval Status", styles["qr_caption"])]
+    header = Table([[logo, heading, qr_block]], colWidths=[25 * mm, 128 * mm, 25 * mm])
+    header.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
-        ("TOPPADDING", (0, 0), (-1, -1), 4),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("ALIGN", (0, 0), (0, 0), "LEFT"),
+        ("ALIGN", (1, 0), (1, 0), "CENTER"),
+        ("ALIGN", (2, 0), (2, 0), "RIGHT"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 2),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 2),
+        ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
-    story.append(details_table)
-    story.append(Spacer(1, 16))
 
-    # === Footer Section ===
-    house_name = participant_data.get("house", "")
-    captain_name = HOUSE_CAPTAINS.get(house_name, "House Captain")
+    story = [header, Spacer(1, 3 * mm)]
+    title_bar = Table([[Paragraph("PARTICIPANT REGISTRATION FORM CUM RECEIPT", styles["form"])]],
+                      colWidths=[178 * mm])
+    title_bar.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), NAVY),
+        ("BOX", (0, 0), (-1, -1), 0.6, NAVY),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.extend([title_bar, Spacer(1, 5 * mm)])
 
-    footer_table_data = [
+    # Participant identity panel
+    identity = Table([[
         [
-            Paragraph("<b>Signature of Participant</b>", footer_style),            
-            ""
+            Paragraph(_safe(name), styles["hero_name"]),
+            Paragraph(f"HOUSE  •  {_safe(house)}", styles["hero_house"]),
         ],
         [
-            Paragraph(f"<b>Date:</b> {datetime.date.today().strftime('%d-%m-%Y')}", footer_style),
-            Paragraph("", footer_style),
-            
-            Paragraph(f"<b>{captain_name}</b><br/><i>House Captain, {house_name}</i>", footer_style),
-            ""
-        ]
-    ]
-
-    footer = Table(footer_table_data, colWidths=[180, 50, 180])
-    footer.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (0, 0), 'LEFT'),  # Align content in first column to the left
-        ('ALIGN', (2, 0), (2, 1), 'RIGHT'), # Align content in second column to the right
-        ('VALIGN', (0, 0), (1, 0), 'TOP'),  # Align both vertically to the top
-        ('TOPPADDING', (0,0), (-1,-1), 40),
-        ('LEFTPADDING', (0,0), (-1,-1), 40),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 10),
-        
+            Paragraph(f"<b>Registration ID:</b> {_safe(registration_id)}", styles["small"]),
+            Paragraph(f"<b>Registered:</b> {_safe(reg_date)}", styles["small"]),
+        ],
+    ]], colWidths=[112 * mm, 66 * mm])
+    identity.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), MINT),
+        ("BOX", (0, 0), (-1, -1), 0.7, colors.HexColor("#B8D8D0")),
+        ("LINEBEFORE", (1, 0), (1, 0), 0.7, colors.HexColor("#B8D8D0")),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
     ]))
+    story.extend([identity, Spacer(1, 4 * mm)])
 
-    story.append(footer)
-    story.append(Spacer(1, 20))
-    story.append(Paragraph("**Submit the form, along with the fee, to your house captain.", approved_style))
-    story.append(Spacer(1, 60))
-    story.append(Paragraph("<i>Organized by ITSRC Sports Committee</i>", subheader_style))
+    story.append(Paragraph("PARTICIPANT DETAILS", styles["section"]))
+    story.append(Spacer(1, 2 * mm))
 
-    # === Build PDF with Border + Watermark ===
-    pdf.build(story, onFirstPage=draw_page_border_and_watermark, onLaterPages=draw_page_border_and_watermark)
+    fields = [
+        ("Post Held", post),
+        ("Office / Posting Details", posting),
+        ("Contact Number", contact),
+        ("Gender", gender),
+        ("Age", age),
+        ("Category", category),
+    ]
+    rows = []
+    for label, value in fields:
+        rows.append([Paragraph(_safe(label), styles["label"]),
+                     Paragraph(_safe(value), styles["value"])])
+
+    details = Table(rows, colWidths=[52 * mm, 126 * mm], hAlign="LEFT")
+    details.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), PALE),
+        ("GRID", (0, 0), (-1, -1), 0.45, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([details, Spacer(1, 4 * mm)])
+
+    # Events and fee are deliberately prominent.
+    story.append(Paragraph("EVENTS &amp; REGISTRATION FEE", styles["section"]))
+    story.append(Spacer(1, 2 * mm))
+    event_text = _safe(event).replace(" | ", "<br/>").replace("; ", "<br/>")
+    event_panel = Table([
+        [Paragraph("<b>Events Registered</b>", styles["label"])],
+        [Paragraph(event_text, styles["value"])],
+        [Paragraph(f"<b>Registration Fee:</b> Rs. {_safe(fee)}", styles["hero_house"])],
+    ], colWidths=[178 * mm])
+    event_panel.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F8FAFC")),
+        ("BOX", (0, 0), (-1, -1), 0.7, LINE),
+        ("LINEBELOW", (0, 0), (-1, 0), 0.45, LINE),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.45, LINE),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    story.extend([event_panel, Spacer(1, 5 * mm)])
+
+    story.append(Paragraph("VERIFICATION &amp; APPROVAL", styles["section"]))
+    story.append(Spacer(1, 2 * mm))
+    participant_cell = [
+        Paragraph("PARTICIPANT", styles["approval"]),
+        Spacer(1, 14 * mm),
+        Paragraph("Signature: __________________________", styles["small"]),
+        Spacer(1, 2 * mm),
+        Paragraph("Date: ______________________________", styles["small"]),
+    ]
+    captain_cell = [
+        Paragraph("HOUSE CAPTAIN", styles["approval"]),
+        Spacer(1, 14 * mm),
+        Paragraph(f"<b>{_safe(captain_name)}</b>", styles["value"]),
+        Paragraph(f"House Captain – {_safe(house)}", styles["small"]),
+        Spacer(1, 2 * mm),
+        Paragraph("Signature / Date: ____________________", styles["small"]),
+    ]
+    approval = Table([[participant_cell, captain_cell]], colWidths=[89 * mm, 89 * mm])
+    approval.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, 0), PALE),
+        ("BACKGROUND", (1, 0), (1, 0), MINT),
+        ("BOX", (0, 0), (-1, -1), 0.65, LINE),
+        ("INNERGRID", (0, 0), (-1, -1), 0.65, LINE),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 9),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 9),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    ]))
+    story.extend([approval, Spacer(1, 4 * mm)])
+
+    instruction_box = Table([[
+        Paragraph("Please submit this form, along with the applicable registration fee, to your House Captain.",
+                  styles["instruction"])
+    ]], colWidths=[178 * mm])
+    instruction_box.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FFF8E8")),
+        ("BOX", (0, 0), (-1, -1), 0.7, GOLD),
+        ("LEFTPADDING", (0, 0), (-1, -1), 8),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+        ("TOPPADDING", (0, 0), (-1, -1), 7),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.extend([
+        instruction_box,
+        Spacer(1, 3 * mm),
+        Paragraph("Organised by ITSRC Sports Committee", ParagraphStyle(
+            "CommitteeFooter", parent=styles["small"], alignment=TA_CENTER,
+            fontName="Helvetica-Oblique",
+        )),
+    ])
+
+    doc.build(story, onFirstPage=draw_page_border_and_watermark,
+              onLaterPages=draw_page_border_and_watermark)
+
     buffer.seek(0)
-
-    with open(output_path, "wb") as f:
-        f.write(buffer.getvalue())
-
+    output_path = str(output_path)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "wb") as output_file:
+        output_file.write(buffer.getvalue())
     return output_path
-
-
-
-
-
-
-
-

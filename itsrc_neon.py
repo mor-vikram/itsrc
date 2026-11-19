@@ -52,16 +52,18 @@ else:
     logo_img_html = '<div style="font-weight:bold;font-size:18px;color:#00695c;">ITSRC</div>'
 
 # --- Define menu options ---
+# Admin Dashboard is shown only after a successful admin login.
 menu_items = [
     "Admin Login",
-    "Admin Dashboard",
     "Participant Registration",
-    "Already Registered (Re-print/Modify)",    
+    "Already Registered (Re-print/Modify)",
     "Insight",
     "Events Schedule",
     "Doubles Partner Selection",
     "Leadership Board"
 ]
+if st.session_state.get("user"):
+    menu_items.insert(1, "Admin Dashboard")
 ## Professional ITSRC header and navigation styling
 st.markdown("""
 <style>
@@ -1552,7 +1554,7 @@ if menu == "Participant Registration":
     """, unsafe_allow_html=True)
 
     # Registration window and fee rules
-    REGISTRATION_START = datetime(2026, 11, 21).date()
+    REGISTRATION_START = datetime(2026, 11, 19).date()
     LAST_REG_DATE = datetime(2026, 12, 13).date()
     REGISTRATION_DEADLINE = datetime(2026, 12, 15).date()
     today = datetime.today().date()
@@ -2188,23 +2190,11 @@ if menu == "Admin Dashboard":
             role = role_info.get("role", "House Admin")
             admin_house = role_info.get("house")  # None for Super Admin
             st.success(f"Welcome, {role} ({user_email})!")
+            approval_flash = st.session_state.pop("admin_approval_flash", None)
+            if approval_flash:
+                st.success(approval_flash)
 
-            # 🔹 colourful legend bar for admin dashboard
-            st.markdown("""
-            <div style="
-                padding:0.6rem 1rem;
-                border-radius:0.6rem;
-                margin:0.5rem 0 1rem 0;
-                background:linear-gradient(90deg,#E3F2FD,#E8F5E9,#FFFDE7,#FFEBEE);
-                border:1px solid #ddd;
-                font-size:0.85rem;">
-                <b>Legend:</b>
-                <span style="color:#1565C0;margin-left:8px;">Blue = Total</span> •
-                <span style="color:#2E7D32;margin-left:8px;">Green = Approved</span> •
-                <span style="color:#F9A825;margin-left:8px;">Yellow = Pending</span> •
-                <span style="color:#B71C1C;margin-left:8px;">Red = Rejected</span>
-            </div>
-            """, unsafe_allow_html=True)
+            # Status labels are explicit in the tables; omit the redundant dashboard-wide legend.
             # Year-wise workspace: historical data is read-only unless explicitly managed.
             render_season_selector("admin")
             st.caption(f"Viewing records for season {selected_season()}")
@@ -2224,16 +2214,108 @@ if menu == "Admin Dashboard":
                                 st.rerun()
                             except Exception as season_error:
                                 st.error(f"Unable to create season: {season_error}")
-            # Tabs vary by Super Admin or house admin
-            
-            if role == "Super Admin":
-                tabs = ["Combined Data", "Winners Entry", *houses, "Event-wise List", "Doubles Pairs"]
+            # Load and scope registrations before creating tabs so live counts can
+            # be displayed as notification badges in the tab labels.
+            all_participants_df = load_all_participants_df()
+            dashboard_df = all_participants_df.copy() if not all_participants_df.empty else pd.DataFrame()
+            if role != "Super Admin" and not dashboard_df.empty:
+                scoped_house = admin_house or (role.replace(" Admin", "") if role.endswith(" Admin") else role)
+                dashboard_df = dashboard_df[dashboard_df["house"].astype(str) == str(scoped_house)].copy()
+            if not dashboard_df.empty:
+                dashboard_df["status"] = dashboard_df.get("status", pd.Series("Pending", index=dashboard_df.index)).fillna("Pending").astype(str)
             else:
-                tabs = ["House Data", "Event-wise List", "Doubles Pairs"]
+                dashboard_df["status"] = pd.Series(dtype=str)
+
+            pending_count = int(dashboard_df["status"].str.strip().str.lower().eq("pending").sum())
+            approved_count = int(dashboard_df["status"].str.strip().str.lower().eq("approved").sum())
+            pending_tab_label = f"Pending Approvals 🔴 {pending_count}"
+            approved_tab_label = f"Approved Forms 🟢 {approved_count}"
+
+            # Tabs vary by Super Admin or house admin.
+            if role == "Super Admin":
+                tabs = ["Combined Data", "Winners Entry", *houses, "Event-wise List", "Doubles Pairs", pending_tab_label, approved_tab_label, "T-shirt Printing"]
+            else:
+                tabs = ["House Data", "Event-wise List", "Doubles Pairs", pending_tab_label, approved_tab_label, "T-shirt Printing"]
 
             tab_objs = st.tabs(tabs)
-            # Load all participants once
-            all_participants_df = load_all_participants_df()
+
+            with tab_objs[tabs.index(pending_tab_label)]:
+                st.subheader("⏳ Pending Registration Approvals")
+                st.caption("Review submitted registrations and approve or reject each form after verification.")
+                pending_df = dashboard_df[dashboard_df["status"].str.strip().str.lower() == "pending"].copy()
+                st.metric("Pending registrations", len(pending_df))
+                if pending_df.empty:
+                    st.success("There are no pending registrations.")
+                else:
+                    search_pending = st.text_input("Search by participant name or contact", key="dashboard_pending_search")
+                    if search_pending.strip():
+                        q = search_pending.strip().lower()
+                        mask = pending_df.get("name", pd.Series("", index=pending_df.index)).astype(str).str.lower().str.contains(q, na=False)
+                        if "contact" in pending_df.columns:
+                            mask = mask | pending_df["contact"].astype(str).str.contains(q, na=False)
+                        pending_df = pending_df[mask]
+                    for _, approval_row in pending_df.iterrows():
+                        pid = approval_row.get("id")
+                        participant_name = str(approval_row.get("name", "Participant"))
+                        with st.container(border=True):
+                            st.markdown(f"**{participant_name}** · {approval_row.get('house', '')}")
+                            c1, c2, c3 = st.columns(3)
+                            c1.caption(f"Designation: {approval_row.get('designation', '')}")
+                            c2.caption(f"Contact: {approval_row.get('contact', '')}")
+                            c3.caption(f"Age: {approval_row.get('age', '')}")
+                            st.write(f"**Events:** {approval_row.get('all_selected_events', approval_row.get('All Selected Events', '')) or '—'}")
+                            st.caption(f"Posting: {approval_row.get('posting_details', approval_row.get('posting', '')) or '—'}")
+                            b1, b2, _ = st.columns([1, 1, 5])
+                            if b1.button("✅ Approve", key=f"dashboard_approve_{pid}", type="primary"):
+                                st.session_state["approval_confirmation"] = {
+                                    "participant_id": pid,
+                                    "name": participant_name,
+                                    "house": str(approval_row.get("house", "")),
+                                }
+                                st.rerun()
+                            if b2.button("❌ Reject", key=f"dashboard_reject_{pid}"):
+                                update_participant_status(participant_id=pid, status="Rejected", approved_by=user_email, fee_collected=False)
+                                st.warning(f"Rejected {participant_name}.")
+                                st.rerun()
+
+            with tab_objs[tabs.index(approved_tab_label)]:
+                st.subheader("✅ Approved Registration Forms")
+                st.caption("Approved registrations for the selected season.")
+                approved_df = dashboard_df[dashboard_df["status"].str.strip().str.lower() == "approved"].copy()
+                st.metric("Approved registrations", len(approved_df))
+                if approved_df.empty:
+                    st.info("No approved registrations are available for this season.")
+                else:
+                    approved_display = make_admin_display_df(approved_df)
+                    st.dataframe(style_status_df(approved_display), use_container_width=True, hide_index=True)
+                    st.download_button(
+                        "⬇️ Download Approved Forms List (CSV)",
+                        data=approved_df.to_csv(index=False).encode("utf-8-sig"),
+                        file_name=f"Approved_Registrations_{selected_season().replace('/', '-')}.csv",
+                        mime="text/csv",
+                        key="dashboard_approved_download"
+                    )
+
+            with tab_objs[tabs.index("T-shirt Printing")]:
+                st.subheader("👕 T-shirt Printing List")
+                st.caption("Prepare the T-shirt roster and size-wise quantities. Approved registrations are selected by default.")
+                if dashboard_df.empty:
+                    st.info("No participant records are available for this season.")
+                elif role == "Super Admin":
+                    tshirt_house = st.selectbox("Select House", ["All Houses"] + houses, key="dashboard_tshirt_house")
+                    if tshirt_house == "All Houses":
+                        for tshirt_house_name in houses:
+                            house_tshirt_df = dashboard_df[dashboard_df["house"] == tshirt_house_name].copy()
+                            with st.expander(tshirt_house_name, expanded=False):
+                                render_house_tshirt_printing(
+                                    house_tshirt_df, tshirt_house_name,
+                                    f"dashboard_tshirt_{re.sub(r'[^A-Za-z0-9]+', '_', tshirt_house_name)}"
+                                )
+                    else:
+                        house_tshirt_df = dashboard_df[dashboard_df["house"] == tshirt_house].copy()
+                        render_house_tshirt_printing(house_tshirt_df, tshirt_house, "dashboard_tshirt_selected")
+                else:
+                    render_house_tshirt_printing(dashboard_df, str(admin_house or (role.replace(" Admin", "") if role.endswith(" Admin") else role)), "dashboard_tshirt_house_admin")
 
             # Combined Data tab
             if role == "Super Admin":
@@ -2443,7 +2525,6 @@ if menu == "Admin Dashboard":
                             )
                         else:
                             st.warning(f"No data available for {house}.")
-                        render_house_tshirt_printing(df, house, f"super_{i}_{house}")
 
 
             else:
@@ -2507,46 +2588,7 @@ if menu == "Admin Dashboard":
                             mime="text/csv"
                         )
 
-                        render_house_tshirt_printing(df_house, house_name, "house_admin")
 
-                        st.markdown("---")
-                        st.subheader("✅ Pending Approvals")
-
-                        # pending approvals always from full house data
-                        pending = df_house[df_house["status"].fillna("Pending") == "Pending"]
-
-                        if pending.empty:
-                            st.info("No pending registrations for approval.")
-                        else:
-                            for _, row in pending.iterrows():
-                                cols = st.columns([4, 1, 1])
-                                with cols[0]:
-                                    st.markdown(
-                                        f"**{row['name']}**  \n"
-                                        f"House: {row['house']}  \n"
-                                        f"Designation: {row.get('designation','')}  \n"
-                                        f"Events: {row.get('all_selected_events','')}"
-                                    )
-                                with cols[1]:
-                                    if st.button("Approve ✅", key=f"approve_{row['id']}"):
-                                        update_participant_status(
-                                            participant_id=row["id"],
-                                            status="Approved",
-                                            approved_by=user_email,
-                                            fee_collected=True
-                                        )
-                                        st.success(f"Approved {row['name']}")
-                                        st.rerun()
-                                with cols[2]:
-                                    if st.button("Reject ❌", key=f"reject_{row['id']}"):
-                                        update_participant_status(
-                                            participant_id=row["id"],
-                                            status="Rejected",
-                                            approved_by=user_email,
-                                            fee_collected=False
-                                        )
-                                        st.warning(f"Rejected {row['name']}")
-                                        st.rerun()
 
             # Event-wise participants tab (last tab)
             with tab_objs[tabs.index("Event-wise List")]:
@@ -2769,6 +2811,36 @@ if menu == "Admin Dashboard":
                                 with c3:
                                     st.write("")  # spacer
                                 st.markdown("---")
+
+            # Approval is a consequential action: require explicit confirmation.
+            @st.dialog("Confirm participant approval")
+            def _confirm_participant_approval():
+                approval_info = st.session_state.get("approval_confirmation", {})
+                st.write("Please confirm that you want to approve this participant's registration.")
+                st.markdown(f"**Participant:** {approval_info.get('name', '—')}")
+                st.markdown(f"**House:** {approval_info.get('house', '—')}")
+                confirm_col, cancel_col = st.columns(2)
+                if confirm_col.button("Confirm Approval", type="primary", use_container_width=True, key="confirm_participant_approval_action"):
+                    result = update_participant_status(
+                        participant_id=approval_info.get("participant_id"),
+                        status="Approved",
+                        approved_by=user_email,
+                        fee_collected=True,
+                    )
+                    if result is not None:
+                        st.session_state["admin_approval_flash"] = (
+                            f"{approval_info.get('name', 'Participant')} ({approval_info.get('house', 'House')}) approved successfully."
+                        )
+                        st.session_state.pop("approval_confirmation", None)
+                        st.rerun()
+                    else:
+                        st.error("Approval could not be completed. Please try again or contact the system administrator.")
+                if cancel_col.button("Cancel", use_container_width=True, key="cancel_participant_approval_action"):
+                    st.session_state.pop("approval_confirmation", None)
+                    st.rerun()
+
+            if st.session_state.get("approval_confirmation"):
+                _confirm_participant_approval()
 
 # ---------------------
 # Insight
