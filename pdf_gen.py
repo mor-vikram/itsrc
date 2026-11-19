@@ -12,8 +12,8 @@ from reportlab.graphics.shapes import Drawing, Rect
 
 HOUSE_CAPTAINS = {
     "CC Challengers": "Shri Rakesh Kumar, ITO",
-    "JAO Giants": "Shri Kishor Kumar, ITO",
-    "Faceless Fighters": "Shri K K Vijayan, ITO",
+    "JAO Giants": "Shri Abid Ali Quadri, ITO",
+    "Faceless Fighters": "Shri Bablu Meena, ITO",
     "Investigation Warriors": "Shri Rohit S B Gupta, ITI",
 }
 
@@ -35,7 +35,7 @@ def draw_page_border_and_watermark(canvas, doc):
     canvas.saveState()
     canvas.translate(width / 2, height / 2)
     canvas.rotate(30)
-    canvas.drawCentredString(0, 0, "ITSRC, Vadodara Annual Sports 2025")
+    canvas.drawCentredString(0, 0, "ITSRC, Vadodara Annual Sports 2026-27")
     canvas.restoreState()
 
     canvas.restoreState()

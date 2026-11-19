@@ -459,6 +459,7 @@ if DATABASE_URL:
             with _conn.cursor() as _cur:
                 _cur.execute("SELECT 1")
                 _cur.fetchone()
+        st.sidebar.success("Neon database connected")
     except Exception as _db_error:
         st.sidebar.error("Neon database connection failed")
         st.error(f"Unable to connect to Neon. Check DATABASE_URL and network access. Details: {_db_error}")
@@ -519,12 +520,13 @@ event_details = {
     "Carom": ["Carom Singles", "Carom Doubles"],
     "Volleyball": ["Volleyball"],
     "Chess": ["Chess"],
-    "Pickle ball": ["Pickle ball Doubles"],
+    "Pickle ball": ["Pickle ball Singles", "Pickle ball Doubles", "Pickle ball Mixed Doubles"],
     "Cycling": ["Slow Cycling"],
     "Walkathon": ["2.2 Km Walk"],
     "Races": ["100 meter", "200 meter", "400 meter", "400 Meter Relay"],
     "Races (Veteran)": ["100 meter (Veteran)", "200 meter (Veteran)", "400 meter (Veteran)", "400 Meter Relay (Veteran)"],
-    "Tug of War": ["Tug of War"]
+    "Tug of War": ["Tug of War"],
+    "Shot Put Throw": ["Shot Put Throw"]
 }
 
 
@@ -964,7 +966,7 @@ def compute_leaderboard_from_winners():
     Scoring Rules:
       • Individual Events → 1st = 5, 2nd = 3, 3rd = 1
       • Team Events (Cricket, Volleyball, Tug of War)
-                         → 1st = 10, 2nd = 6, 3rd = 1
+                         → 1st = 10, 2nd = 6
     """
     winners_raw = load_winners_df()   # may return DataFrame or []
 
@@ -992,7 +994,7 @@ def compute_leaderboard_from_winners():
 
     # Points mapping
     individual_points = {"1st": 5, "2nd": 3, "3rd": 1}
-    team_points       = {"1st": 10, "2nd": 6, "3rd": 1}
+    team_points       = {"1st": 10, "2nd": 6}
 
     # Team events list (exactly as stored in winners.event_name)
     team_events = {"Cricket", "Volleyball", "Tug of War"}
@@ -1509,6 +1511,32 @@ if menu == "Participant Registration":
         padding:5px 10px;border-radius:20px;margin:10px 6px 0 0;font-size:12px;color:white;}
     .reg-section {font-size:17px;font-weight:700;color:#087f75;padding:7px 0 5px 0;
         border-bottom:1px solid rgba(8,127,117,.2);margin:8px 0 10px 0;}
+    .house-composition-helper {
+        margin: 7px 0 13px 0;
+        padding: 11px 13px;
+        background: #f3faf7;
+        border: 1px solid #cfe5dc;
+        border-left: 4px solid #087f73;
+        border-radius: 10px;
+        color: #294b43;
+        font-size: 12px;
+        line-height: 1.55;
+    }
+    .house-composition-helper > div { margin: 2px 0; }
+    .house-composition-helper b { color: #123b36; }
+    .house-composition-helper .house-helper-title {
+        font-weight: 800;
+        color: #087f73;
+        margin-bottom: 5px;
+        font-size: 12px;
+    }
+    .house-composition-helper .house-helper-note {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid #dcebe5;
+        color: #6b5a2c;
+        font-style: italic;
+    }
     .reg-note {background:#f0faf8;border-left:4px solid #0b9888;border-radius:8px;padding:10px 13px;
         color:#244b47;font-size:13px;margin:8px 0 12px 0;}
     div[data-testid="stForm"] {border:1px solid rgba(8,127,117,.22);border-radius:14px;padding:16px 18px;background:rgba(8,127,117,.025);}
@@ -1517,20 +1545,20 @@ if menu == "Participant Registration":
     <div class="reg-hero">
       <h2>🏆 ITSRC Sports Meet · 2026–27</h2>
       <p>Income Tax Sports & Recreation Club, Vadodara</p>
-      <span class="reg-chip">🗓️ 23 Nov – 20 Dec 2026</span>
+      <span class="reg-chip">🗓️ 21 Nov – 15 Dec 2026</span>
       <span class="reg-chip">💳 Registration ₹250</span>
       <span class="reg-chip">⏰ Late fee ₹150 after 13 Dec</span>
     </div>
     """, unsafe_allow_html=True)
 
     # Registration window and fee rules
-    REGISTRATION_START = datetime(2026, 11, 23).date()
+    REGISTRATION_START = datetime(2026, 11, 21).date()
     LAST_REG_DATE = datetime(2026, 12, 13).date()
-    REGISTRATION_DEADLINE = datetime(2026, 12, 20).date()
+    REGISTRATION_DEADLINE = datetime(2026, 12, 15).date()
     today = datetime.today().date()
 
     if today < REGISTRATION_START:
-        st.info("📅 Registrations open on **23 November 2026**. You can review the details now and submit from the opening date.")
+        st.info("📅 Registrations open on **21 November 2026**.")
         st.stop()
     if today > REGISTRATION_DEADLINE:
         st.error("🚫 Registration for 2026–27 is closed.")
@@ -1559,7 +1587,32 @@ if menu == "Participant Registration":
         c1, c2 = st.columns(2)
         with c1:
             name = st.text_input("Full name *", placeholder="Enter your name")
-            house = st.selectbox("House *", houses, index=None, placeholder="Choose your house")
+            house = st.selectbox(
+                "House *",
+                houses,
+                index=None,
+                placeholder="Choose your house",
+                help=(
+                    "Select the house according to your office/unit composition in the "
+                    "ITSRC Annual Sports Circular 2026–27."
+                ),
+            )
+            st.markdown(
+                """
+                <div class="house-composition-helper">
+                  <div class="house-helper-title">🏠 House composition — as per ITSRC circular</div>
+                  <div><b>CC Challengers:</b> CCIT, TDS, Appeals, MSTU, Exemption and ZAO</div>
+                  <div><b>JAO Giants:</b> Pr. CIT-1, Vadodara</div>
+                  <div><b>Faceless Fighters:</b> AU, VU and RU</div>
+                  <div><b>Investigation Warriors:</b> Central, Investigation, International Taxation,
+                    System, CI and Audit</div>
+                  <div class="house-helper-note">
+                    Retired employees represent the house of their last place of posting.
+                  </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
             designation = st.selectbox("Post held *", [
                 "CCIT", "PCIT", "CIT", "Addl.CIT", "Jt.CIT", "DCIT", "ACIT", "ITO",
                 "Sr.PS", "PS", "AO-Gr III", "AO-Gr. II", "AO Gr. I", "ITI", "OS",
@@ -3023,46 +3076,147 @@ if menu == "Insight":
                     st.plotly_chart(fig_status_fee, use_container_width=True)
 
 # ---------------------
-# Events Schedule (static content kept)
-# ---------------------
-# ---------------------
-# ---------------------
-# Events Schedule
+# Events Schedule — Annual Sports Circular 2026-27
 # ---------------------
 if menu == "Events Schedule":
-    st.title("📅 Events Schedule")
-    st.subheader("Schedule for ITSRC Sports Events 2026-27")
-    st.info("Scroll the schedule below or download it for printing.")
+    st.markdown("""
+    <style>
+      .schedule-hero {background:linear-gradient(115deg,#123b36 0%,#087f73 65%,#b88a35 100%);
+        padding:24px 26px;border-radius:18px;color:#fff;margin:4px 0 18px 0;
+        box-shadow:0 9px 24px rgba(18,59,54,.14);}
+      .schedule-kicker {font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:800;color:#d8eee7;}
+      .schedule-heading {font-size:27px;font-weight:800;line-height:1.2;margin:5px 0 6px 0;color:#fff;}
+      .schedule-sub {font-size:13px;color:#e4f3ef;margin:0;}
+      .schedule-stat {background:#f5faf8;border:1px solid #dcebe5;border-radius:13px;padding:13px 15px;min-height:82px;}
+      .schedule-stat .num {font-size:24px;font-weight:800;color:#123b36;line-height:1.1;}
+      .schedule-stat .lbl {font-size:11px;color:#607a73;margin-top:5px;font-weight:600;}
+      .event-card {height:100%;background:#fff;border:1px solid #e3ebe7;border-radius:15px;padding:15px 16px;
+        box-shadow:0 3px 12px rgba(18,59,54,.045);margin-bottom:12px;}
+      .event-top {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px;}
+      .event-icon {font-size:25px;line-height:1;}
+      .event-status {font-size:10px;font-weight:800;letter-spacing:.3px;border-radius:99px;padding:5px 9px;white-space:nowrap;}
+      .event-confirmed {background:#e6f5ed;color:#176c49;}
+      .event-tentative {background:#fff4dc;color:#93630b;}
+      .event-title {font-size:16px;font-weight:800;color:#173d37;margin:0 0 9px 0;}
+      .event-date {font-size:14px;font-weight:800;color:#087f73;margin-bottom:9px;}
+      .event-meta {font-size:11px;color:#526b64;line-height:1.55;margin-top:4px;}
+      .event-meta b {color:#294b43;}
+      .event-card-foot {border-top:1px solid #edf1ef;margin-top:10px;padding-top:8px;font-size:10px;color:#71827d;}
+      .schedule-note {background:#fff8e8;border:1px solid #f0dca9;border-left:4px solid #d5ad55;
+        padding:12px 14px;border-radius:10px;color:#654f20;font-size:12px;line-height:1.5;margin:12px 0;}
+      .schedule-section {font-size:17px;font-weight:800;color:#123b36;margin:8px 0 12px 0;}
+    </style>
+    <div class="schedule-hero">
+      <div class="schedule-kicker">Income-Tax Sports & Recreation Club · Vadodara</div>
+      <div class="schedule-heading">🏆 Annual Sports Meet 2026–27</div>
+      <p class="schedule-sub">Official event calendar · 15 sporting events · Men & Women</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    pdf_path = Path("Schedule 2026-27.pdf")
+    # Schedule transcribed from the Annual Sports Circular (English schedule, page 4).
+    # Chess and Carom dates are set to 24.12.2026 as specifically confirmed by the organiser.
+    schedule_rows = [
+        {"Event":"Cricket", "Icon":"🏏", "Category":"Men / Women", "Date":"02.01.2027", "Date label":"02 Jan 2027", "Status":"Scheduled", "In-charge":"Rishikesh Parab; Rohit S. B. Gupta", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Table Tennis", "Icon":"🏓", "Category":"Men / Women", "Date":"24.12.2026", "Date label":"24 Dec 2026", "Status":"Scheduled", "In-charge":"Sujeet Kumar; Arpit", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Badminton", "Icon":"🏸", "Category":"Men / Women", "Date":"", "Date label":"To be announced", "Status":"To be announced", "In-charge":"Sangram S. Patel; Sonu Yadav; Jayashree S.", "Venue":"To be informed", "Note":"Date to be declared subject to availability of ground."},
+        {"Event":"Volleyball", "Icon":"🏐", "Category":"Men / Women", "Date":"27.12.2026", "Date label":"27 Dec 2026", "Status":"Scheduled", "In-charge":"Dishant Shah; Prakash Philip", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Chess", "Icon":"♟️", "Category":"Men / Women", "Date":"24.12.2026", "Date label":"24 Dec 2026", "Status":"Scheduled", "In-charge":"Neeraj Gupta; Shailja Shukla", "Venue":"To be informed", "Note":"Date confirmed as 24.12.2026."},
+        {"Event":"Carom", "Icon":"🎯", "Category":"Men / Women", "Date":"24.12.2026", "Date label":"24 Dec 2026", "Status":"Scheduled", "In-charge":"Veermani; Chirag Solanki", "Venue":"To be informed", "Note":"Date confirmed as 24.12.2026."},
+        {"Event":"Race (100 metres)", "Icon":"🏃", "Category":"Men / Women", "Date":"", "Date label":"To be announced", "Status":"To be announced", "In-charge":"D. K. Jadhav", "Venue":"To be informed", "Note":"Date to be declared subject to availability of ground."},
+        {"Event":"Race (200 metres)", "Icon":"🏃‍♀️", "Category":"Men / Women", "Date":"", "Date label":"To be announced", "Status":"To be announced", "In-charge":"D. K. Jadhav", "Venue":"To be informed", "Note":"Date to be declared subject to availability of ground."},
+        {"Event":"Race (400 metres)", "Icon":"🏃", "Category":"Men / Women", "Date":"", "Date label":"To be announced", "Status":"To be announced", "In-charge":"D. K. Jadhav", "Venue":"To be informed", "Note":"Date to be declared subject to availability of ground."},
+        {"Event":"Relay Race (4 × 100 metres)", "Icon":"🏃‍♂️", "Category":"Men / Women", "Date":"", "Date label":"To be announced", "Status":"To be announced", "In-charge":"D. K. Jadhav", "Venue":"To be informed", "Note":"Date to be declared subject to availability of ground."},
+        {"Event":"Tug of War", "Icon":"🪢", "Category":"Men / Women", "Date":"17.01.2027", "Date label":"17 Jan 2027", "Status":"Scheduled", "In-charge":"Manish Gupta", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Slow Cycling", "Icon":"🚴", "Category":"Men / Women", "Date":"17.01.2027", "Date label":"17 Jan 2027", "Status":"Scheduled", "In-charge":"Sudhir Kumar", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Walkathon", "Icon":"🚶", "Category":"Men / Women", "Date":"17.01.2027", "Date label":"17 Jan 2027", "Status":"Scheduled", "In-charge":"Arpan Gyan", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Pickle Ball", "Icon":"🏓", "Category":"Men / Women", "Date":"24.12.2026", "Date label":"24 Dec 2026", "Status":"Scheduled", "In-charge":"Dishant Shah", "Venue":"To be informed", "Note":"Venue will be informed later."},
+        {"Event":"Shot Put Throw", "Icon":"🥇", "Category":"Men / Women", "Date":"", "Date label":"To be announced", "Status":"To be announced", "In-charge":"D. K. Jadhav", "Venue":"To be informed", "Note":"Date to be declared subject to availability of ground."},
+    ]
+    schedule_df = pd.DataFrame(schedule_rows)
+    scheduled_count = int((schedule_df["Status"] == "Scheduled").sum())
+    pending_count = int((schedule_df["Status"] == "To be announced").sum())
+    venues_awaited_count = int((schedule_df["Venue"] == "To be informed").sum())
 
-    if pdf_path.exists():
-        with open(pdf_path, "rb") as f:
-            pdf_bytes = f.read()
+    m1, m2, m3, m4 = st.columns(4)
+    for col, number, label in [
+        (m1, len(schedule_df), "TOTAL EVENTS"),
+        (m2, scheduled_count, "DATES LISTED"),
+        (m3, pending_count, "DATES AWAITED"),
+        (m4, venues_awaited_count, "VENUES AWAITED"),
+    ]:
+        with col:
+            st.markdown(f'<div class="schedule-stat"><div class="num">{number}</div><div class="lbl">{label}</div></div>', unsafe_allow_html=True)
 
-        base64_pdf = base64.b64encode(pdf_bytes).decode("utf-8")
+    st.markdown("<div class='schedule-note'><b>📌 Venue update:</b> Venues will be communicated later, based on sports-complex availability and participant strength. Events marked “To be announced” are also subject to ground availability.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='schedule-section'>Find an event</div>", unsafe_allow_html=True)
+    f1, f2, f3 = st.columns([1.5, 1, 1])
+    with f1:
+        event_search = st.text_input("Search events or game in-charge", placeholder="e.g. Badminton, D. K. Jadhav", key="schedule_search")
+    with f2:
+        status_filter = st.selectbox("Date status", ["All events", "Scheduled", "To be announced"], key="schedule_status_filter")
+    with f3:
+        date_group = st.selectbox("Schedule", ["All dates", "December 2026", "January 2027", "Awaiting date"], key="schedule_date_filter")
 
-        # 🔹 Embedded scrollable PDF
-        html(
-            f"""
-            <iframe
-                src="data:application/pdf;base64,{base64_pdf}"
-                style="width:100%; height:800px; border:none;"
-            ></iframe>
-            """,
-            height=820,
-        )
+    filtered_schedule = schedule_df.copy()
+    if event_search.strip():
+        q = event_search.strip().lower()
+        filtered_schedule = filtered_schedule[filtered_schedule.apply(lambda row: q in " ".join(str(v) for v in row.values).lower(), axis=1)]
+    if status_filter != "All events":
+        filtered_schedule = filtered_schedule[filtered_schedule["Status"] == status_filter]
+    if date_group == "December 2026":
+        filtered_schedule = filtered_schedule[filtered_schedule["Date"].str.endswith(".12.2026")]
+    elif date_group == "January 2027":
+        filtered_schedule = filtered_schedule[filtered_schedule["Date"].str.endswith(".01.2027")]
+    elif date_group == "Awaiting date":
+        filtered_schedule = filtered_schedule[filtered_schedule["Status"] == "To be announced"]
 
-        # 🔹 Download button
-        st.download_button(
-            label="📥 Download Full Schedule (PDF)",
-            data=pdf_bytes,
-            file_name="Schedule 2026-27.pdf",
-            mime="application/pdf",
-        )
+    st.markdown(f"<div class='event-meta' style='margin:5px 0 12px 2px'><b>{len(filtered_schedule)}</b> event(s) shown</div>", unsafe_allow_html=True)
+    if filtered_schedule.empty:
+        st.info("No events match your filters. Try changing the search or date status.")
     else:
-        st.error("Schedule PDF not found on the server. Please contact the organizer.")
+        # Display a compact responsive two-column card grid.
+        for idx in range(0, len(filtered_schedule), 2):
+            card_cols = st.columns(2, gap="medium")
+            for offset, col in enumerate(card_cols):
+                row_idx = idx + offset
+                if row_idx >= len(filtered_schedule):
+                    continue
+                row = filtered_schedule.iloc[row_idx]
+                if row["Status"] == "Scheduled":
+                    badge_class, badge_text = "event-confirmed", "DATE LISTED"
+                else:
+                    badge_class, badge_text = "event-tentative", "DATE AWAITED"
+                with col:
+                    st.markdown(f"""
+                    <div class="event-card">
+                      <div class="event-top"><span class="event-icon">{row['Icon']}</span><span class="event-status {badge_class}">{badge_text}</span></div>
+                      <div class="event-title">{row['Event']}</div>
+                      <div class="event-date">📅 {row['Date label']}</div>
+                      <div class="event-meta">👥 <b>Category:</b> {row['Category']}</div>
+                      <div class="event-meta">📍 <b>Venue:</b> {row['Venue']}</div>
+                      <div class="event-meta">🧑‍💼 <b>Game in-charge:</b> {row['In-charge']}</div>
+                      <div class="event-card-foot">{row['Note']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
+    export_df = filtered_schedule[["Event", "Category", "Date label", "Status", "Venue", "In-charge", "Note"]].rename(columns={"Date label":"Proposed date"})
+    st.download_button("📥 Download filtered schedule (CSV)", data=export_df.to_csv(index=False).encode("utf-8-sig"),
+                       file_name="ITSRC_Events_Schedule_2026-27.csv", mime="text/csv", use_container_width=False)
+
+    circular_candidates = [
+        Path("Annual Sports Circular .pdf"),
+        Path("Annual Sports Circular.pdf"),
+        Path("Annual Sports Circular (1).pdf"),
+    ]
+    circular_path = next((candidate for candidate in circular_candidates if candidate.exists()), None)
+    if circular_path:
+        with open(circular_path, "rb") as circular_file:
+            circular_bytes = circular_file.read()
+        st.download_button("📄 Download official Annual Sports Circular (PDF)", data=circular_bytes,
+                           file_name="Annual_Sports_Circular_2026-27.pdf", mime="application/pdf")
+    
+    with st.expander("📋 View schedule as a table"):
+        st.dataframe(export_df, use_container_width=True, hide_index=True)
 
 # ---------------------
 # ---------------------
