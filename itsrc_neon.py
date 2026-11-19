@@ -1140,7 +1140,7 @@ def style_status_df(df):
 
     styler = df.style
     if "status" in df.columns:
-        styler = styler.applymap(color_status, subset=["status"])
+        styler = styler.map(color_status, subset=["status"])
     return styler
 
 
