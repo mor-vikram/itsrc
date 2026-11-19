@@ -1628,7 +1628,7 @@ if menu == "Participant Registration":
     """, unsafe_allow_html=True)
 
     # Registration window and fee rules
-    REGISTRATION_START = datetime(2026, 11, 19).date()
+    REGISTRATION_START = datetime(2026, 11, 21).date()
     LAST_REG_DATE = datetime(2026, 12, 13).date()
     REGISTRATION_DEADLINE = datetime(2026, 12, 15).date()
     today = datetime.today().date()
