@@ -2017,6 +2017,7 @@ if menu == "Already Registered (Re-print/Modify)":
 
     if st.session_state["searched_record"]:
         reg = st.session_state["searched_record"]
+        status = str(reg.get("status", "Pending") or "Pending").strip().capitalize()
 
         # Parse stored event data safely
         if isinstance(reg.get("selected_events"), str):
@@ -2086,9 +2087,17 @@ if menu == "Already Registered (Re-print/Modify)":
         # ------------------
         # Edit Form
         # ------------------
-        if status == "Pending":
-            
-            # show modify form
+        if status in ("Pending", "Rejected"):
+            if status == "Rejected":
+                st.warning(
+                    "Your previous registration was rejected by the House Captain. "
+                    "Please review/correct your details or event selections below and "
+                    "submit the form again. Your corrected registration will return "
+                    "to Pending Approval."
+                )
+
+            # Pending registrations can be edited; rejected registrations can be
+            # corrected and resubmitted for a fresh House Captain review.
             with st.form("edit_registration_form", clear_on_submit=False):
                 name = st.text_input("Name", reg.get("name", ""))
                 house = st.selectbox(
@@ -2175,7 +2184,12 @@ if menu == "Already Registered (Re-print/Modify)":
                 st.write(f"**Total Fee:** Rs.{total_fee}")
 
 
-                save_changes = st.form_submit_button("💾 Save Changes")
+                submit_label = (
+                    "🔄 Correct & Resubmit Registration"
+                    if status == "Rejected"
+                    else "💾 Save Changes"
+                )
+                save_changes = st.form_submit_button(submit_label)
 
         else:
             st.info("Your registration has already been approved. For any changes, please contact your House In-charge.")
@@ -2202,6 +2216,16 @@ if menu == "Already Registered (Re-print/Modify)":
                 "date_of_reg": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             }
 
+            # A rejected form becomes a fresh pending submission after the
+            # participant edits/resubmits it. Clear the previous decision metadata.
+            if status == "Rejected":
+                updated_data.update({
+                    "status": "Pending",
+                    "fee_collected": False,
+                    "approved_by": None,
+                    "approved_at": None,
+                })
+
             try:
                 if not reg.get("id"):
                     st.error("⚠️ Missing participant ID — cannot update record.")
@@ -2209,7 +2233,13 @@ if menu == "Already Registered (Re-print/Modify)":
                     response = neon_client.table("participants").update(updated_data).eq("id", reg["id"]).execute()
 
                     if hasattr(response, "data") and response.data:
-                        st.success("✅ Record updated successfully!")
+                        if status == "Rejected":
+                            st.success(
+                                "✅ Your corrected registration has been resubmitted successfully "
+                                "and is now Pending House Captain Approval."
+                            )
+                        else:
+                            st.success("✅ Record updated successfully!")
 
                         # regenerate new PDF
                         participant_data["name"] = name
