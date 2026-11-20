@@ -535,7 +535,7 @@ if DATABASE_URL:
             with _conn.cursor() as _cur:
                 _cur.execute("SELECT 1")
                 _cur.fetchone()
-        st.sidebar.success("Neon database connected")
+      
     except Exception as _db_error:
         st.sidebar.error("Neon database connection failed")
         st.error(f"Unable to connect to Neon. Check DATABASE_URL and network access. Details: {_db_error}")
