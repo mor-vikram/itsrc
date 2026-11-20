@@ -54,7 +54,7 @@ else:
 # --- Define menu options ---
 # Admin Dashboard is shown only after a successful admin login.
 menu_items = [
-    "Admin & House Captain Login",
+    "Admin Login",
     "Participant Registration",
     "Already Registered (Re-print/Modify)",
     "Insight",
