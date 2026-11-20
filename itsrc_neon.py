@@ -1621,20 +1621,20 @@ if menu == "Participant Registration":
     <div class="reg-hero">
       <h2>🏆 ITSRC Sports Meet · 2026–27</h2>
       <p>Income Tax Sports & Recreation Club, Vadodara</p>
-      <span class="reg-chip">🗓️ 21 Nov – 15 Dec 2026</span>
+      <span class="reg-chip">🗓️ 20 Nov – 15 Dec 2026</span>
       <span class="reg-chip">💳 Registration ₹250</span>
       <span class="reg-chip">⏰ Late fee ₹150 after 13 Dec</span>
     </div>
     """, unsafe_allow_html=True)
 
     # Registration window and fee rules
-    REGISTRATION_START = datetime(2026, 11, 21).date()
+    REGISTRATION_START = datetime(2026, 11, 20).date()
     LAST_REG_DATE = datetime(2026, 12, 13).date()
     REGISTRATION_DEADLINE = datetime(2026, 12, 15).date()
     today = datetime.today().date()
 
     if today < REGISTRATION_START:
-        st.info("📅 Registrations open on **21 November 2026**.")
+        st.info("📅 Registrations open on **20 November 2026**.")
         st.stop()
     if today > REGISTRATION_DEADLINE:
         st.error("🚫 Registration for 2026–27 is closed.")
